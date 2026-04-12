@@ -1,0 +1,519 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2 class="text-white mb-4">Panel de Control</h2>
+
+<ul class="nav nav-tabs ghost-tabs" id="myTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="agendar-tab" data-bs-toggle="tab" data-bs-target="#agendar" type="button" role="tab">Agendar Laboratorio</button>
+    </li>
+
+    <li class="nav-item" role="presentation">
+        <button class="nav-link text-info fw-bold" id="calendario-tab" data-bs-toggle="tab" data-bs-target="#vista-calendario" type="button" role="tab">
+            Calendario General
+        </button>
+    </li>
+
+    {% if es_admin %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="recepcion-tab" data-bs-toggle="tab" data-bs-target="#recepcion" type="button" role="tab">Recepción de Equipos</button>
+    </li>
+    {% endif %}
+
+    <li class="nav-item" role="presentation">
+        <button class="nav-link text-warning" id="notificaciones-tab" data-bs-toggle="tab" data-bs-target="#notificaciones" type="button" role="tab">
+            Notificaciones {% if es_admin %}{% else %}{% endif %}
+            {% if notificaciones or alertas %}<span class="badge bg-danger">{{ (notificaciones|length) + (alertas|length) }}</span>{% endif %}
+        </button>
+    </li>
+
+    {% if es_admin %}
+    <li class="nav-item" role="presentation">
+        <button class="nav-link text-light" id="historial-tab" data-bs-toggle="tab" data-bs-target="#historial" type="button" role="tab">Gestión y Reportes</button>
+    </li>
+    {% endif %}
+</ul>
+
+<div class="tab-content ghost-card p-4 mt-2" id="myTabContent">
+
+    <div class="tab-pane fade show active" id="agendar" role="tabpanel">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'danger' }} alert-dismissible fade show mt-3" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form action="/agendar" method="POST" class="mt-3">
+            <div class="row mb-3">
+                <div class="col-md-5">
+                    <label class="form-label text-white">Laboratorio / Recurso</label>
+                    <select class="form-select ghost-input" name="laboratorio" id="selectLaboratorio" onchange="verificarCantidadEquipos()" required>
+                        <option value="Laboratorio de Computación">Laboratorio de Computación</option>
+                        <option value="Laboratorio Móvil 1">Laboratorio Móvil 1 (Elige cantidad)</option>
+                        <option value="Laboratorio Móvil 2">Laboratorio Móvil 2 (Elige cantidad)</option>
+                        <option value="Laboratorio Móvil Completo">Lab. Móvil Completo (40 tablets)</option>
+                        <option value="Pantalla Digital 1">Pantalla Digital 1</option>
+                        <option value="Pantalla Digital 2">Pantalla Digital 2</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2" id="cajaCantidadEquipos" style="display: none;">
+                    <label class="form-label text-warning">Nº Equipos</label>
+                    <input type="number" class="form-control ghost-input border-warning" name="cantidad_equipos" id="inputCantidadEquipos" min="1" max="20" placeholder="Máx 20">
+                </div>
+
+                <div class="col-md-5" id="cajaFecha">
+                    <label class="form-label text-white">Día de Inicio (Lunes a Viernes)</label>
+                    <input type="date" class="form-control ghost-input" name="fecha" id="fechaReserva" required>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label text-white">Tipo de Bloque</label>
+                    <select class="form-select ghost-input" id="tipoBloque" onchange="actualizarBloques()" required>
+                        <option value="">Seleccione...</option>
+                        <option value="45">45 Minutos</option>
+                        <option value="90">90 Minutos</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-white">Horario</label>
+                    <select class="form-select ghost-input" name="horarioBloque" id="horarioBloque" required>
+                        <option value="">Seleccione primero el tipo de bloque</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-white">Repetir esta agenda por:</label>
+                    <select class="form-select ghost-input" name="recurrencia" required>
+                        <option value="unico">Solo este día</option>
+                        <option value="semanal">1 Semana (+7 días)</option>
+                        <option value="1_mes">Todo 1 Mes</option>
+                        {% if es_admin %}
+                        <option value="2_meses">Todo 2 Meses</option>
+                        <option value="semestre">Todo el Semestre</option>
+                        <option value="anio">Todo el Año</option>
+                        {% endif %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-white">Comentario / Uso Específico</label>
+                <textarea class="form-control ghost-input" name="comentario" rows="2" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-light ghost-btn">Confirmar Reserva(s)</button>
+        </form>
+    </div>
+
+    <div class="tab-pane fade" id="vista-calendario" role="tabpanel">
+        <div class="p-3 mt-3 ghost-card" style="min-height: 600px;">
+            <div id='calendar'></div>
+        </div>
+    </div>
+
+    {% if es_admin %}
+    <div class="tab-pane fade" id="recepcion" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+            <h4 class="text-white">Agendas de Hoy</h4>
+            <button type="button" class="btn btn-outline-light btn-sm" onclick="abrirFormularioManual()">+ Recepción Manual sin Reserva</button>
+        </div>
+
+        {% if reservas_hoy %}
+        <div class="row mb-4">
+            {% for r in reservas_hoy %}
+            <div class="col-md-6 mb-2">
+                <div class="list-group-item ghost-card text-white p-3 d-flex justify-content-between align-items-center" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);">
+                    <div>
+                        <strong class="text-info">{{ r.laboratorio }} {% if r.cantidad_equipos > 0 %}({{ r.cantidad_equipos }} eq.){% endif %}</strong><br>
+                        <small>🕒 {{ r.bloque }} | 👤 {{ r.usuario }}</small>
+                    </div>
+                    <button type="button" class="btn btn-success btn-sm ghost-btn" onclick="prepararRecepcion('{{ r.usuario }}')">Revisar 👉</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info mb-4" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay reservas agendadas para el día de hoy.</div>
+        {% endif %}
+
+        <div id="cajaFormularioRecepcion" style="display: none; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
+            <h5 class="text-white mb-3">Formulario de Recepción</h5>
+            <form action="/guardar_recepcion" method="POST">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label text-white">Docente que entrega</label>
+                        <select class="form-select ghost-input" name="docente" id="selectDocenteRecepcion" required>
+                            <option value="">Seleccione un docente...</option>
+                            {% for docente in docentes %}
+                            <option value="{{ docente.name }}">{{ docente.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-white">Hora de entrega al docente</label>
+                        <input type="time" class="form-control ghost-input" name="hora_entrega" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-white">Hora devolución de equipos</label>
+                        <input type="time" class="form-control ghost-input" name="hora_recepcion" required>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label text-white">Estado de Recepción</label>
+                        <select class="form-select ghost-input" name="estadoRecepcion" id="estadoRecepcionForm" onchange="verificarComentarioAdmin()" required>
+                            <option value="completo">Completo</option>
+                            <option value="incompleto">Incompleto</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white">Nº de Equipos Recepcionados</label>
+                        <input type="number" class="form-control ghost-input" name="equipos" min="0" max="40" required>
+                    </div>
+                </div>
+
+                <div class="row mb-3" id="cajaComentarioAdmin" style="display: none;">
+                    <div class="col-12">
+                        <label class="form-label text-warning">Observaciones sobre daños o faltantes</label>
+                        <textarea class="form-control ghost-input border-warning" name="comentario_admin" id="inputComentarioAdmin" rows="2"></textarea>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-light ghost-btn">Guardar y Notificar al Docente</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="tab-pane fade" id="notificaciones" role="tabpanel">
+        {% if es_admin %}
+        <h4 class="text-white mt-3">Bandeja de Control de Entregas</h4>
+
+        {% if alertas %}
+        <h5 class="text-danger mt-4">⚠️ Alertas de Inconformidad</h5>
+        <div class="list-group mb-4">
+            {% for alerta in alertas %}
+            <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(220,53,69,0.15); border: 1px solid rgba(220,53,69,0.3);">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1 text-danger">Recepción del {{ alerta.fecha }}</h6>
+                    <form action="/archivar_notificacion/{{ alerta.id }}" method="POST"><button type="submit" class="btn btn-sm btn-outline-light">Marcar vista ✔️</button></form>
+                </div>
+                <p class="mb-1"><strong>Docente:</strong> {{ alerta.docente }} indica: "{{ alerta.comentario_docente }}"</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <h5 class="text-info mt-4">Respuestas Recientes</h5>
+        {% if notificaciones %}
+        <div class="list-group mt-3">
+            {% for notif in notificaciones %}
+            <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(255,255,255,0.05); border: none;">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">Recepción del {{ notif.fecha }}</h6>
+                    <div>
+                        <span class="badge {% if notif.conforme == 'Si' %}bg-success{% else %}bg-danger{% endif %} me-2">{{ notif.estado|capitalize }} / {{ notif.conforme }} Conforme</span>
+                        <form action="/archivar_notificacion/{{ notif.id }}" method="POST" style="display:inline;"><button type="submit" class="btn btn-sm btn-outline-light">Marcar vista ✔️</button></form>
+                    </div>
+                </div>
+                <p class="mb-0"><strong>Docente:</strong> {{ notif.docente }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay respuestas nuevas.</div>
+        {% endif %}
+
+        {% else %}
+        <h4 class="text-white mt-3">Bandeja de Entrada Docente</h4>
+        {% if notificaciones %}
+        <div class="list-group mt-3">
+            {% for notif in notificaciones %}
+            <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(255,255,255,0.1); border: none;">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">Revisión de Equipos - {{ notif.fecha }}</h5>
+                    <small class="text-warning">Requiere Firma</small>
+                </div>
+                <p class="mb-1">El administrador ha marcado esta recepción como <strong>{{ notif.estado }}</strong>.</p>
+                <button type="button" class="btn btn-outline-light btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalRecepcion{{ notif.id }}">Ver Reporte y Firmar</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No tienes recepciones pendientes por revisar.</div>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    {% if es_admin %}
+    <div class="tab-pane fade" id="historial" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+            <h4 class="text-white m-0">Historial de Agendas</h4>
+            <a href="{{ url_for('exportar_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Excel</a>
+        </div>
+        <div class="table-responsive mb-5">
+            <table class="table text-white table-sm" style="font-size: 0.9em;">
+                <thead>
+                <tr style="background: rgba(255,255,255,0.1);">
+                    <th>Fecha</th>
+                    <th>Laboratorio/Recurso</th>
+                    <th>Horario</th>
+                    <th>Docente</th>
+                    <th>Uso</th>
+                    <th>Acciones</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for r in reservas %}
+                <tr>
+                    <td>{{ r.fecha }}</td>
+                    <td>{{ r.laboratorio }} {% if r.cantidad_equipos > 0 %}({{r.cantidad_equipos}}){% endif %}</td>
+                    <td>{{ r.bloque }}</td>
+                    <td>{{ r.usuario }}</td>
+                    <td>{{ r.comentario }}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-bs-toggle="modal" data-bs-target="#modalEditarReserva{{ r.id }}">✏️</button>
+                        <form action="/eliminar_reserva/{{ r.id }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="return confirm('¿Seguro que deseas eliminar esta reserva?');">❌</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <hr style="border-color: rgba(255,255,255,0.2);">
+
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+            <h4 class="text-white m-0">Historial de Recepciones</h4>
+            <a href="{{ url_for('exportar_recepciones_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">
+                Descargar Excel
+            </a>
+        </div>
+        <div class="table-responsive">
+            <table class="table text-white table-sm" style="font-size: 0.9em;">
+                <thead>
+                <tr style="background: rgba(255,255,255,0.1);">
+                    <th>Fecha</th>
+                    <th>Docente</th>
+                    <th>Entregó</th>
+                    <th>Recibió</th>
+                    <th>Equipos</th>
+                    <th>Estado Final</th>
+                    <th>Comentario (Admin/Docente)</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for r in recepciones %}
+                <tr>
+                    <td>{{ r.fecha }}</td>
+                    <td>{{ r.docente }}</td>
+                    <td>{{ r.hora_entrega }}</td>
+                    <td>{{ r.hora_recepcion }}</td>
+                    <td>{{ r.equipos_recepcionados }}</td>
+                    <td>
+                        {% if r.conforme == 'Pendiente' %}
+                        <span class="badge bg-warning text-dark">Pendiente de Firma</span>
+                        {% elif r.conforme == 'Si' %}
+                        <span class="badge bg-success">{{ r.estado|capitalize }} / Conforme</span>
+                        {% else %}
+                        <span class="badge bg-danger">{{ r.estado|capitalize }} / Inconforme</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.comentario_admin %}<small class="text-warning">A: {{ r.comentario_admin }}</small><br>{% endif %}
+                        {% if r.comentario_docente %}<small class="text-info">D: {{ r.comentario_docente }}</small>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+{% if not es_admin and notificaciones %}
+{% for notif in notificaciones %}
+<div class="modal fade" id="modalRecepcion{{ notif.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-dark" style="background: #e9ecef;">
+            <div class="modal-header">
+                <h5 class="modal-title">Firma de Recepción - {{ notif.fecha }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/responder_recepcion/{{ notif.id }}" method="POST">
+                <div class="modal-body">
+                    <p><strong>Hora que entregaste:</strong> <input type="time" class="form-control form-control-sm" value="{{ notif.hora_entrega }}" readonly></p>
+                    <p><strong>Hora de revisión:</strong> <input type="time" class="form-control form-control-sm" value="{{ notif.hora_recepcion }}" readonly></p>
+                    <p><strong>Equipos recepcionados:</strong> <input type="number" class="form-control form-control-sm" value="{{ notif.equipos_recepcionados }}" readonly></p>
+                    <p><strong>Estado dictaminado:</strong> <input type="text" class="form-control form-control-sm text-{{ 'danger' if notif.estado == 'incompleto' else 'success' }} fw-bold" value="{{ notif.estado|capitalize }}" readonly></p>
+
+                    {% if notif.estado == 'incompleto' and notif.comentario_admin %}
+                    <div class="alert alert-danger p-2">
+                        <strong>Observación del Admin:</strong> {{ notif.comentario_admin }}
+                    </div>
+                    {% endif %}
+
+                    <hr>
+                    <p><strong>¿Estás conforme con este reporte?</strong></p>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="respuesta" id="si{{ notif.id }}" value="Si" required onclick="document.getElementById('cajaComentario{{ notif.id }}').style.display='none'">
+                        <label class="form-check-label" for="si{{ notif.id }}">Sí, conforme</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="respuesta" id="no{{ notif.id }}" value="No" onclick="document.getElementById('cajaComentario{{ notif.id }}').style.display='block'">
+                        <label class="form-check-label" for="no{{ notif.id }}">No estoy conforme</label>
+                    </div>
+                    <div class="mt-3" id="cajaComentario{{ notif.id }}" style="display: none;">
+                        <label>Justifica tu inconformidad:</label>
+                        <textarea class="form-control" name="comentario_docente" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Firmar y Enviar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if es_admin %}
+{% for r in reservas %}
+<div class="modal fade" id="modalEditarReserva{{ r.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-dark" style="background: #e9ecef;">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Reserva</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/editar_reserva/{{ r.id }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Laboratorio</label>
+                        <select class="form-select form-select-sm" name="laboratorio" required>
+                            <option value="Laboratorio de Computación" {% if r.laboratorio == 'Laboratorio de Computación' %}selected{% endif %}>Laboratorio de Computación</option>
+                            <option value="Laboratorio Móvil 1" {% if r.laboratorio == 'Laboratorio Móvil 1' %}selected{% endif %}>Laboratorio Móvil 1 (20 tablets)</option>
+                            <option value="Laboratorio Móvil 2" {% if r.laboratorio == 'Laboratorio Móvil 2' %}selected{% endif %}>Laboratorio Móvil 2 (20 tablets)</option>
+                            <option value="Laboratorio Móvil Completo" {% if r.laboratorio == 'Laboratorio Móvil Completo' %}selected{% endif %}>Lab. Móvil Completo (40 tablets)</option>
+                            <option value="Pantalla Digital 1" {% if r.laboratorio == 'Pantalla Digital 1' %}selected{% endif %}>Pantalla Digital 1</option>
+                            <option value="Pantalla Digital 2" {% if r.laboratorio == 'Pantalla Digital 2' %}selected{% endif %}>Pantalla Digital 2</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Fecha</label>
+                        <input type="date" class="form-control form-control-sm" name="fecha" value="{{ r.fecha }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Bloque Horario</label>
+                        <input type="text" class="form-control form-control-sm" name="horarioBloque" value="{{ r.bloque }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Comentario</label>
+                        <textarea class="form-control form-control-sm" name="comentario" rows="2" required>{{ r.comentario }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<script>
+    function verificarCantidadEquipos() {
+        var lab = document.getElementById('selectLaboratorio').value;
+        var cajaCantidad = document.getElementById('cajaCantidadEquipos');
+        var inputCantidad = document.getElementById('inputCantidadEquipos');
+        var cajaFecha = document.getElementById('cajaFecha');
+
+        if (lab === 'Laboratorio Móvil 1' || lab === 'Laboratorio Móvil 2') {
+            cajaCantidad.style.display = 'block';
+            inputCantidad.required = true;
+            cajaFecha.classList.replace('col-md-5', 'col-md-3');
+        } else {
+            cajaCantidad.style.display = 'none';
+            inputCantidad.required = false;
+            inputCantidad.value = '';
+            cajaFecha.classList.replace('col-md-3', 'col-md-5');
+        }
+    }
+
+    function verificarComentarioAdmin() {
+        var estado = document.getElementById('estadoRecepcionForm').value;
+        var caja = document.getElementById('cajaComentarioAdmin');
+        var input = document.getElementById('inputComentarioAdmin');
+        if (estado === 'incompleto') {
+            caja.style.display = 'block';
+            input.required = true;
+        } else {
+            caja.style.display = 'none';
+            input.required = false;
+            input.value = '';
+        }
+    }
+
+    function prepararRecepcion(nombreDocente) {
+        document.getElementById('cajaFormularioRecepcion').style.display = 'block';
+        document.getElementById('selectDocenteRecepcion').value = nombreDocente;
+        document.getElementById('cajaFormularioRecepcion').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function abrirFormularioManual() {
+        document.getElementById('cajaFormularioRecepcion').style.display = 'block';
+        document.getElementById('selectDocenteRecepcion').value = '';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('calendar');
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            locale: 'es',
+            buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día', list: 'Agenda' },
+            headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+            hiddenDays: [0, 6],
+            slotMinTime: '08:00:00',
+            slotMaxTime: '18:00:00',
+            allDaySlot: false,
+            events: '/api/reservas',
+            eventClick: function(info) {
+                alert('Detalles de la Reserva:\n\n' + info.event.title + '\nComentario: ' + info.event.extendedProps.description);
+            }
+        });
+        calendar.render();
+        const tabCalendario = document.getElementById('calendario-tab');
+        if (tabCalendario) tabCalendario.addEventListener('shown.bs.tab', function () { calendar.updateSize(); });
+    });
+
+    const fechaInput = document.getElementById('fechaReserva');
+    fechaInput.addEventListener('change', function(e){
+        if([6,0].includes(new Date(this.value).getUTCDay())){ alert("Solo de Lunes a Viernes."); this.value = ''; }
+    });
+
+    const bloques45 = ["08:00 - 08:45", "08:45 - 09:30", "09:45 - 10:30", "10:30 - 11:15", "11:30 - 12:15", "12:15 - 13:00", "14:00 - 14:45", "14:45 - 15:30", "15:40 - 16:25", "16:25 - 17:10"];
+    const bloques90 = ["08:00 - 09:30", "09:45 - 11:15", "11:30 - 13:00", "14:00 - 15:30", "15:40 - 17:10"];
+
+    function actualizarBloques() {
+        const tipo = document.getElementById('tipoBloque').value;
+        const selectHorario = document.getElementById('horarioBloque');
+        selectHorario.innerHTML = '';
+        let opciones = tipo === '45' ? bloques45 : tipo === '90' ? bloques90 : [];
+        opciones.forEach(horario => {
+            let option = document.createElement('option');
+            option.value = horario; option.text = horario;
+            selectHorario.add(option);
+        });
+    }
+</script>
+{% endblock %}

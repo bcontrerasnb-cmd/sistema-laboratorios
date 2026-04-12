@@ -1,0 +1,146 @@
+body.ghost-bg {
+    background: linear-gradient(rgba(10, 14, 23, 0.75), rgba(15, 34, 48, 0.75)),
+    url('../img/fondo.jpg');
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+}
+
+.ghost-navbar {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.profile-pic {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.ghost-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.ghost-input {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #fff !important;
+}
+
+.ghost-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.ghost-input option {
+    background: #16213e;
+    color: #fff;
+}
+
+.ghost-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    transition: all 0.3s ease;
+}
+
+.ghost-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
+.ghost-tabs .nav-link {
+    color: rgba(255, 255, 255, 0.6);
+    border: none;
+}
+
+.ghost-tabs .nav-link.active {
+    background: transparent;
+    color: #fff;
+    border-bottom: 2px solid #fff;
+}
+
+.ghost-footer {
+    padding: 20px 0;
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* =========================================
+   DISEÑO DE LA TABLA DEL ADMIN
+   ========================================= */
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-color: #fff;
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #fff;
+}
+
+/* =========================================
+   DISEÑO ELEGANTE PARA FULLCALENDAR
+   ========================================= */
+.fc-theme-standard .fc-scrollgrid {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: transparent;
+}
+
+.fc-theme-standard td, .fc-theme-standard th {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.fc-col-header-cell {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 10px 0 !important;
+}
+
+.fc .fc-daygrid-day.fc-day-today, .fc .fc-timegrid-col.fc-day-today {
+    background-color: rgba(25, 135, 84, 0.15) !important;
+}
+
+.fc .fc-button-primary {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: #fff !important;
+}
+
+.fc .fc-button-primary:not(:disabled):active,
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+    background-color: rgba(255, 255, 255, 0.3) !important;
+    color: #fff !important;
+}
+
+.fc-event {
+    border: none !important;
+    border-radius: 4px;
+    padding: 2px 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.fc-event-title {
+    font-weight: bold;
+}
+
+/* NUEVO: Forzar texto blanco en el calendario y quitar subrayado azul */
+#calendar, #calendar a, #calendar .fc-event-main {
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
