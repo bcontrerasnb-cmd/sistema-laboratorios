@@ -70,7 +70,15 @@ def dashboard():
     if 'usuario' not in session: return redirect(url_for('login'))
     es_admin = session['usuario'] in ADMINISTRADORES
     hoy_str = datetime.now().strftime('%Y-%m-%d')
-    reservas_hoy = Reserva.query.filter_by(fecha=hoy_str).order_by(Reserva.bloque.asc()).all()
+
+
+    # Solo buscamos las reservas de hoy que sean estrictamente Laboratorios Móviles
+    laboratorios_moviles = ['Laboratorio Móvil 1', 'Laboratorio Móvil 2', 'Laboratorio Móvil Completo']
+    reservas_hoy = Reserva.query.filter(
+        Reserva.fecha == hoy_str,
+        Reserva.laboratorio.in_(laboratorios_moviles)
+    ).order_by(Reserva.bloque.asc()).all()
+    # -------------------------------------------------------------
 
     if es_admin:
         alertas_admin = Recepcion.query.filter_by(conforme='No', archivada_admin=False).all()
