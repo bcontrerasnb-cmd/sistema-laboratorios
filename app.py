@@ -10,7 +10,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres.imzdhutlbristfrfh
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# En tu archivo app.py
 ADMINISTRADORES = ['admin', 'evaldes@colegioconcepcionlinares.cl', 'cmunoz@colegioconcepcionlinares.cl']
 
 # --- MODELOS DE BASE DE DATOS ---
@@ -33,6 +32,7 @@ class Recepcion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.String(20), nullable=False)
     docente = db.Column(db.String(100), nullable=False)
+    laboratorio = db.Column(db.String(50))
     hora_entrega = db.Column(db.String(20), nullable=False)
     hora_recepcion = db.Column(db.String(20), nullable=False)
     estado = db.Column(db.String(20), nullable=False)
@@ -69,17 +69,21 @@ def login():
 def dashboard():
     if 'usuario' not in session: return redirect(url_for('login'))
     es_admin = session['usuario'] in ADMINISTRADORES
-    hoy_str = datetime.now().strftime('%Y-%m-%d')
+    hoy_obj = datetime.now()
+    hoy_str = hoy_obj.strftime('%Y-%m-%d')
 
-
-    # Solo buscamos las reservas de hoy que sean estrictamente Laboratorios Móviles
+    # Filtro de móviles para la pestaña de Recepción
     laboratorios_moviles = ['Laboratorio Móvil 1', 'Laboratorio Móvil 2', 'Laboratorio Móvil Completo']
     reservas_hoy = Reserva.query.filter(
         Reserva.fecha == hoy_str,
         Reserva.laboratorio.in_(laboratorios_moviles)
     ).order_by(Reserva.bloque.asc()).all()
-    # -------------------------------------------------------------
 
+    # Mapeo de recepciones para control de flujo
+    reps_hoy = Recepcion.query.filter_by(fecha=hoy_str).all()
+    mapa_recepciones = {(r.docente, r.laboratorio): r for r in reps_hoy}
+
+    # Notificaciones
     if es_admin:
         alertas_admin = Recepcion.query.filter_by(conforme='No', archivada_admin=False).all()
         notificaciones_pendientes = Recepcion.query.filter(Recepcion.conforme != 'Pendiente', Recepcion.archivada_admin == False).order_by(Recepcion.id.desc()).all()
@@ -90,10 +94,42 @@ def dashboard():
         notificaciones_pendientes.extend(notificaciones_incompletas)
 
     lista_docentes = User.query.filter(User.username != 'admin').order_by(User.name).all()
-    todas_las_reservas = Reserva.query.order_by(Reserva.fecha.asc()).all()
-    todas_las_recepciones = Recepcion.query.order_by(Recepcion.fecha.asc()).all()
+    todas_las_recepciones = Recepcion.query.order_by(Recepcion.fecha.desc()).limit(100).all() # Mostramos las ultimas 100 para no saturar
 
-    return render_template('dashboard.html', nombre_usuario=session['nombre'], notificaciones=notificaciones_pendientes, alertas=alertas_admin, docentes=lista_docentes, reservas=todas_las_reservas, recepciones=todas_las_recepciones, reservas_hoy=reservas_hoy, es_admin=es_admin)
+    # --- NUEVO: LÓGICA DE FILTROS PARA EL HISTORIAL DE AGENDAS ---
+    filtro_docente = request.args.get('filtro_docente')
+    filtro_fecha = request.args.get('filtro_fecha')
+
+    query_reservas = Reserva.query
+
+    if filtro_docente or filtro_fecha:
+        # Si hay filtros, buscamos en el historial completo
+        if filtro_docente:
+            query_reservas = query_reservas.filter_by(usuario=filtro_docente)
+        if filtro_fecha:
+            query_reservas = query_reservas.filter_by(fecha=filtro_fecha)
+    else:
+        # Si NO hay filtros, mostramos solo la semana actual (Lunes a Domingo)
+        inicio_semana = hoy_obj - timedelta(days=hoy_obj.weekday())
+        fin_semana = inicio_semana + timedelta(days=6)
+        query_reservas = query_reservas.filter(
+            Reserva.fecha >= inicio_semana.strftime('%Y-%m-%d'),
+            Reserva.fecha <= fin_semana.strftime('%Y-%m-%d')
+        )
+
+    todas_las_reservas = query_reservas.order_by(Reserva.fecha.asc(), Reserva.bloque.asc()).all()
+    # -------------------------------------------------------------
+
+    return render_template('dashboard.html',
+                           mapa_recepciones=mapa_recepciones,
+                           nombre_usuario=session['nombre'],
+                           notificaciones=notificaciones_pendientes,
+                           alertas=alertas_admin,
+                           docentes=lista_docentes,
+                           reservas=todas_las_reservas,
+                           recepciones=todas_las_recepciones,
+                           reservas_hoy=reservas_hoy,
+                           es_admin=es_admin)
 
 # --- RUTAS DE AGENDAMIENTO Y EDICIÓN ---
 @app.route('/agendar', methods=['POST'])
@@ -134,15 +170,9 @@ def agendar():
         for reserva in reservas_del_dia:
             reserva_inicio, reserva_fin = reserva.bloque.split(' - ')
             if nuevo_inicio < reserva_fin and nuevo_fin > reserva_inicio:
-                if laboratorio == reserva.laboratorio:
-                    hay_choque = True
-                    break
-                if laboratorio == 'Laboratorio Móvil Completo' and reserva.laboratorio in ['Laboratorio Móvil 1', 'Laboratorio Móvil 2']:
-                    hay_choque = True
-                    break
-                if laboratorio in ['Laboratorio Móvil 1', 'Laboratorio Móvil 2'] and reserva.laboratorio == 'Laboratorio Móvil Completo':
-                    hay_choque = True
-                    break
+                if laboratorio == reserva.laboratorio: hay_choque = True; break
+                if laboratorio == 'Laboratorio Móvil Completo' and reserva.laboratorio in ['Laboratorio Móvil 1', 'Laboratorio Móvil 2']: hay_choque = True; break
+                if laboratorio in ['Laboratorio Móvil 1', 'Laboratorio Móvil 2'] and reserva.laboratorio == 'Laboratorio Móvil Completo': hay_choque = True; break
 
         if hay_choque:
             errores += 1
@@ -186,6 +216,7 @@ def guardar_recepcion():
     nueva_recepcion = Recepcion(
         fecha=datetime.now().strftime('%Y-%m-%d'),
         docente=request.form.get('docente'),
+        laboratorio=request.form.get('laboratorio', 'Laboratorio Móvil'),
         hora_entrega=request.form.get('hora_entrega'),
         hora_recepcion=request.form.get('hora_recepcion'),
         estado=request.form.get('estadoRecepcion'),
@@ -194,7 +225,7 @@ def guardar_recepcion():
     )
     db.session.add(nueva_recepcion)
     db.session.commit()
-    flash('Recepción guardada exitosamente. Aparecerá en el historial como "Pendiente".', 'success')
+    flash('Recepción registrada. El seguimiento aparecerá en tu campana.', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/responder_recepcion/<int:id>', methods=['POST'])
@@ -226,7 +257,7 @@ def exportar_excel():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False, sheet_name='Reservas')
     output.seek(0)
-    return send_file(output, download_name='Historial_Reservas.xlsx', as_attachment=True)
+    return send_file(output, download_name='Historial_Reservas_Completo.xlsx', as_attachment=True)
 
 @app.route('/exportar_recepciones_excel')
 def exportar_recepciones_excel():
@@ -234,24 +265,18 @@ def exportar_recepciones_excel():
     recepciones = Recepcion.query.order_by(Recepcion.fecha.asc()).all()
     data = []
     for r in recepciones:
-        # Lógica para mostrar el estado final en el Excel
-        if r.conforme == 'Pendiente':
-            estado_final = 'Pendiente'
-        else:
-            estado_final = f"{r.estado.capitalize()} / {'Conforme' if r.conforme == 'Si' else 'Inconforme'}"
-
+        if r.conforme == 'Pendiente': estado_final = 'Pendiente'
+        else: estado_final = f"{r.estado.capitalize()} / {'Conforme' if r.conforme == 'Si' else 'Inconforme'}"
         data.append({
-            'ID': r.id, 'Fecha': r.fecha, 'Docente': r.docente, 'Entregó': r.hora_entrega,
+            'ID': r.id, 'Fecha': r.fecha, 'Docente': r.docente, 'Laboratorio': r.laboratorio, 'Entregó': r.hora_entrega,
             'Recibió': r.hora_recepcion, 'Equipos': r.equipos_recepcionados,
-            'Estado Final': estado_final, 'Comentario Docente': r.comentario_docente,
-            'Comentario Admin': r.comentario_admin
+            'Estado Final': estado_final, 'Comentario Docente': r.comentario_docente, 'Comentario Admin': r.comentario_admin
         })
-
     df = pd.DataFrame(data)
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False, sheet_name='Recepciones')
     output.seek(0)
-    return send_file(output, download_name='Historial_Recepciones.xlsx', as_attachment=True)
+    return send_file(output, download_name='Historial_Recepciones_Completo.xlsx', as_attachment=True)
 
 # --- API CALENDARIO ---
 @app.route('/api/reservas')
@@ -269,14 +294,10 @@ def api_reservas():
             elif 'Pantalla' in r.laboratorio: color = '#dc3545'
 
             titulo = f"{r.laboratorio} ({r.cantidad_equipos} eq.)" if r.cantidad_equipos > 0 else r.laboratorio
-
             eventos.append({
-                'id': r.id,
-                'title': f"{titulo} - {r.usuario}",
-                'start': f"{r.fecha}T{inicio}:00",
-                'end': f"{r.fecha}T{fin}:00",
-                'description': r.comentario,
-                'color': color
+                'id': r.id, 'title': f"{titulo} - {r.usuario}",
+                'start': f"{r.fecha}T{inicio}:00", 'end': f"{r.fecha}T{fin}:00",
+                'description': r.comentario, 'color': color
             })
         except: pass
     return jsonify(eventos)

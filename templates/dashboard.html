@@ -9,20 +9,18 @@
     </li>
 
     <li class="nav-item" role="presentation">
-        <button class="nav-link text-info fw-bold" id="calendario-tab" data-bs-toggle="tab" data-bs-target="#vista-calendario" type="button" role="tab">
-            Calendario General
-        </button>
+        <button class="nav-link text-info fw-bold" id="calendario-tab" data-bs-toggle="tab" data-bs-target="#vista-calendario" type="button" role="tab">Calendario General</button>
     </li>
 
     {% if es_admin %}
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="recepcion-tab" data-bs-toggle="tab" data-bs-target="#recepcion" type="button" role="tab">Recepción de Equipos</button>
+        <button class="nav-link" id="recepcion-tab" data-bs-toggle="tab" data-bs-target="#recepcion" type="button" role="tab">Recepción de Móviles</button>
     </li>
     {% endif %}
 
     <li class="nav-item" role="presentation">
         <button class="nav-link text-warning" id="notificaciones-tab" data-bs-toggle="tab" data-bs-target="#notificaciones" type="button" role="tab">
-            Notificaciones {% if es_admin %}{% else %}{% endif %}
+            Campana {% if es_admin %}Admin{% else %}Docente{% endif %}
             {% if notificaciones or alertas %}<span class="badge bg-danger">{{ (notificaciones|length) + (alertas|length) }}</span>{% endif %}
         </button>
     </li>
@@ -118,31 +116,40 @@
     {% if es_admin %}
     <div class="tab-pane fade" id="recepcion" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mt-3 mb-3">
-            <h4 class="text-white">Agendas de Hoy</h4>
-            <button type="button" class="btn btn-outline-light btn-sm" onclick="abrirFormularioManual()">+ Recepción Manual sin Reserva</button>
+            <h4 class="text-white">Agendas de Hoy (Móviles)</h4>
+            <button type="button" class="btn btn-outline-light btn-sm" onclick="abrirFormularioManual()">+ Recepción Manual</button>
         </div>
 
         {% if reservas_hoy %}
         <div class="row mb-4">
             {% for r in reservas_hoy %}
+            {% set recepcion_existente = mapa_recepciones.get((r.usuario, r.laboratorio)) %}
+            {% if not recepcion_existente or not recepcion_existente.archivada_admin %}
             <div class="col-md-6 mb-2">
                 <div class="list-group-item ghost-card text-white p-3 d-flex justify-content-between align-items-center" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);">
                     <div>
                         <strong class="text-info">{{ r.laboratorio }} {% if r.cantidad_equipos > 0 %}({{ r.cantidad_equipos }} eq.){% endif %}</strong><br>
                         <small>🕒 {{ r.bloque }} | 👤 {{ r.usuario }}</small>
                     </div>
-                    <button type="button" class="btn btn-success btn-sm ghost-btn" onclick="prepararRecepcion('{{ r.usuario }}')">Revisar 👉</button>
+
+                    {% if not recepcion_existente %}
+                    <button type="button" class="btn btn-success btn-sm ghost-btn" onclick="prepararRecepcion('{{ r.usuario }}', '{{ r.laboratorio }}')">Revisar 👉</button>
+                    {% else %}
+                    <button type="button" class="btn btn-secondary btn-sm" disabled>{% if recepcion_existente.conforme == 'Pendiente' %}⏳ Firma Pendiente{% else %}✅ Respondida{% endif %}</button>
+                    {% endif %}
                 </div>
             </div>
+            {% endif %}
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info mb-4" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay reservas agendadas para el día de hoy.</div>
+        <div class="alert alert-info mb-4" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay reservas de móviles agendadas para el día de hoy, o todas ya fueron archivadas.</div>
         {% endif %}
 
         <div id="cajaFormularioRecepcion" style="display: none; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
             <h5 class="text-white mb-3">Formulario de Recepción</h5>
             <form action="/guardar_recepcion" method="POST">
+                <input type="hidden" name="laboratorio" id="inputLabRecepcion" value="Recepción Manual">
                 <div class="row mb-3">
                     <div class="col-md-4">
                         <label class="form-label text-white">Docente que entrega</label>
@@ -154,11 +161,11 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label text-white">Hora de entrega al docente</label>
+                        <label class="form-label text-white">Hora de Entrega</label>
                         <input type="time" class="form-control ghost-input" name="hora_entrega" required>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label text-white">Hora devolución de equipos</label>
+                        <label class="form-label text-white">Hora de Recepción</label>
                         <input type="time" class="form-control ghost-input" name="hora_recepcion" required>
                     </div>
                 </div>
@@ -175,14 +182,12 @@
                         <input type="number" class="form-control ghost-input" name="equipos" min="0" max="40" required>
                     </div>
                 </div>
-
                 <div class="row mb-3" id="cajaComentarioAdmin" style="display: none;">
                     <div class="col-12">
-                        <label class="form-label text-warning">Observaciones sobre daños o faltantes</label>
+                        <label class="form-label text-warning">Observaciones sobre daños o faltantes (Visible para el Docente)</label>
                         <textarea class="form-control ghost-input border-warning" name="comentario_admin" id="inputComentarioAdmin" rows="2"></textarea>
                     </div>
                 </div>
-
                 <button type="submit" class="btn btn-light ghost-btn">Guardar y Notificar al Docente</button>
             </form>
         </div>
@@ -192,7 +197,6 @@
     <div class="tab-pane fade" id="notificaciones" role="tabpanel">
         {% if es_admin %}
         <h4 class="text-white mt-3">Bandeja de Control de Entregas</h4>
-
         {% if alertas %}
         <h5 class="text-danger mt-4">⚠️ Alertas de Inconformidad</h5>
         <div class="list-group mb-4">
@@ -220,14 +224,13 @@
                         <form action="/archivar_notificacion/{{ notif.id }}" method="POST" style="display:inline;"><button type="submit" class="btn btn-sm btn-outline-light">Marcar vista ✔️</button></form>
                     </div>
                 </div>
-                <p class="mb-0"><strong>Docente:</strong> {{ notif.docente }}</p>
+                <p class="mb-0"><strong>Docente:</strong> {{ notif.docente }} ({{ notif.laboratorio }})</p>
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay respuestas nuevas.</div>
         {% endif %}
-
         {% else %}
         <h4 class="text-white mt-3">Bandeja de Entrada Docente</h4>
         {% if notificaciones %}
@@ -251,10 +254,38 @@
 
     {% if es_admin %}
     <div class="tab-pane fade" id="historial" role="tabpanel">
-        <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
             <h4 class="text-white m-0">Historial de Agendas</h4>
-            <a href="{{ url_for('exportar_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Excel</a>
+            <a href="{{ url_for('exportar_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Todo Excel</a>
         </div>
+
+        <div class="ghost-card p-3 mb-4" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
+            <form method="GET" action="/dashboard" class="row g-3 align-items-end">
+                <input type="hidden" name="tab" value="historial"> <div class="col-md-4">
+                <label class="form-label text-white-50"><small>Filtrar por Docente</small></label>
+                <select class="form-select ghost-input form-select-sm" name="filtro_docente">
+                    <option value="">Todos los docentes</option>
+                    {% for d in docentes %}
+                    <option value="{{ d.name }}" {% if request.args.get('filtro_docente') == d.name %}selected{% endif %}>{{ d.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+                <div class="col-md-4">
+                    <label class="form-label text-white-50"><small>Filtrar por Día exacto</small></label>
+                    <input type="date" class="form-control ghost-input form-control-sm" name="filtro_fecha" value="{{ request.args.get('filtro_fecha', '') }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-info btn-sm fw-bold">🔍 Buscar Historial</button>
+                    <a href="/dashboard?tab=historial" class="btn btn-outline-light btn-sm ms-2">Limpiar / Ver Semana</a>
+                </div>
+            </form>
+            {% if not request.args.get('filtro_docente') and not request.args.get('filtro_fecha') %}
+            <div class="mt-2 text-warning"><small>* Mostrando únicamente las reservas de la semana en curso. Usa el filtro para ver fechas antiguas.</small></div>
+            {% else %}
+            <div class="mt-2 text-success"><small>* Mostrando resultados históricos según el filtro aplicado.</small></div>
+            {% endif %}
+        </div>
+
         <div class="table-responsive mb-5">
             <table class="table text-white table-sm" style="font-size: 0.9em;">
                 <thead>
@@ -290,10 +321,8 @@
         <hr style="border-color: rgba(255,255,255,0.2);">
 
         <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
-            <h4 class="text-white m-0">Historial de Recepciones</h4>
-            <a href="{{ url_for('exportar_recepciones_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">
-                Descargar Excel
-            </a>
+            <h4 class="text-white m-0">Últimas 100 Recepciones</h4>
+            <a href="{{ url_for('exportar_recepciones_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Todo Excel</a>
         </div>
         <div class="table-responsive">
             <table class="table text-white table-sm" style="font-size: 0.9em;">
@@ -301,11 +330,11 @@
                 <tr style="background: rgba(255,255,255,0.1);">
                     <th>Fecha</th>
                     <th>Docente</th>
-                    <th>Entregó</th>
-                    <th>Recibió</th>
+                    <th>Laboratorio</th>
+                    <th>Entregó/Recibió</th>
                     <th>Equipos</th>
                     <th>Estado Final</th>
-                    <th>Comentario (Admin/Docente)</th>
+                    <th>Comentarios</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -313,17 +342,13 @@
                 <tr>
                     <td>{{ r.fecha }}</td>
                     <td>{{ r.docente }}</td>
-                    <td>{{ r.hora_entrega }}</td>
-                    <td>{{ r.hora_recepcion }}</td>
+                    <td>{{ r.laboratorio }}</td>
+                    <td>{{ r.hora_entrega }} - {{ r.hora_recepcion }}</td>
                     <td>{{ r.equipos_recepcionados }}</td>
                     <td>
-                        {% if r.conforme == 'Pendiente' %}
-                        <span class="badge bg-warning text-dark">Pendiente de Firma</span>
-                        {% elif r.conforme == 'Si' %}
-                        <span class="badge bg-success">{{ r.estado|capitalize }} / Conforme</span>
-                        {% else %}
-                        <span class="badge bg-danger">{{ r.estado|capitalize }} / Inconforme</span>
-                        {% endif %}
+                        {% if r.conforme == 'Pendiente' %}<span class="badge bg-warning text-dark">Pendiente de Firma</span>
+                        {% elif r.conforme == 'Si' %}<span class="badge bg-success">{{ r.estado|capitalize }} / Conforme</span>
+                        {% else %}<span class="badge bg-danger">{{ r.estado|capitalize }} / Inconforme</span>{% endif %}
                     </td>
                     <td>
                         {% if r.comentario_admin %}<small class="text-warning">A: {{ r.comentario_admin }}</small><br>{% endif %}
@@ -350,6 +375,7 @@
             </div>
             <form action="/responder_recepcion/{{ notif.id }}" method="POST">
                 <div class="modal-body">
+                    <p><strong>Recurso:</strong> {{ notif.laboratorio }}</p>
                     <p><strong>Hora que entregaste:</strong> <input type="time" class="form-control form-control-sm" value="{{ notif.hora_entrega }}" readonly></p>
                     <p><strong>Hora de revisión:</strong> <input type="time" class="form-control form-control-sm" value="{{ notif.hora_recepcion }}" readonly></p>
                     <p><strong>Equipos recepcionados:</strong> <input type="number" class="form-control form-control-sm" value="{{ notif.equipos_recepcionados }}" readonly></p>
@@ -360,7 +386,6 @@
                         <strong>Observación del Admin:</strong> {{ notif.comentario_admin }}
                     </div>
                     {% endif %}
-
                     <hr>
                     <p><strong>¿Estás conforme con este reporte?</strong></p>
                     <div class="form-check form-check-inline">
@@ -437,7 +462,6 @@
         var cajaCantidad = document.getElementById('cajaCantidadEquipos');
         var inputCantidad = document.getElementById('inputCantidadEquipos');
         var cajaFecha = document.getElementById('cajaFecha');
-
         if (lab === 'Laboratorio Móvil 1' || lab === 'Laboratorio Móvil 2') {
             cajaCantidad.style.display = 'block';
             inputCantidad.required = true;
@@ -464,18 +488,31 @@
         }
     }
 
-    function prepararRecepcion(nombreDocente) {
+    function prepararRecepcion(nombreDocente, nombreLab) {
         document.getElementById('cajaFormularioRecepcion').style.display = 'block';
         document.getElementById('selectDocenteRecepcion').value = nombreDocente;
+        document.getElementById('inputLabRecepcion').value = nombreLab;
         document.getElementById('cajaFormularioRecepcion').scrollIntoView({ behavior: 'smooth' });
     }
 
     function abrirFormularioManual() {
         document.getElementById('cajaFormularioRecepcion').style.display = 'block';
         document.getElementById('selectDocenteRecepcion').value = '';
+        document.getElementById('inputLabRecepcion').value = 'Recepción Manual';
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        // --- NUEVO: TRUCO PARA MANTENER LA PESTAÑA AL FILTRAR ---
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('tab') === 'historial') {
+            var triggerEl = document.querySelector('#historial-tab');
+            if(triggerEl) {
+                var tab = new bootstrap.Tab(triggerEl);
+                tab.show();
+            }
+        }
+        // ---------------------------------------------------------
+
         var calendarEl = document.getElementById('calendar');
         var calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: 'timeGridWeek',
@@ -497,9 +534,11 @@
     });
 
     const fechaInput = document.getElementById('fechaReserva');
-    fechaInput.addEventListener('change', function(e){
-        if([6,0].includes(new Date(this.value).getUTCDay())){ alert("Solo de Lunes a Viernes."); this.value = ''; }
-    });
+    if(fechaInput) {
+        fechaInput.addEventListener('change', function(e){
+            if([6,0].includes(new Date(this.value).getUTCDay())){ alert("Solo de Lunes a Viernes."); this.value = ''; }
+        });
+    }
 
     const bloques45 = ["08:00 - 08:45", "08:45 - 09:30", "09:45 - 10:30", "10:30 - 11:15", "11:30 - 12:15", "12:15 - 13:00", "14:00 - 14:45", "14:45 - 15:30", "15:40 - 16:25", "16:25 - 17:10"];
     const bloques90 = ["08:00 - 09:30", "09:45 - 11:15", "11:30 - 13:00", "14:00 - 15:30", "15:40 - 17:10"];
