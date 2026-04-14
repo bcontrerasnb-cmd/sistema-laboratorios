@@ -20,7 +20,7 @@
 
     <li class="nav-item" role="presentation">
         <button class="nav-link text-warning" id="notificaciones-tab" data-bs-toggle="tab" data-bs-target="#notificaciones" type="button" role="tab">
-            Campana {% if es_admin %}Admin{% else %}Docente{% endif %}
+            Notificaciones{% if es_admin %}{% else %}{% endif %}
             {% if notificaciones or alertas %}<span class="badge bg-danger">{{ (notificaciones|length) + (alertas|length) }}</span>{% endif %}
         </button>
     </li>
