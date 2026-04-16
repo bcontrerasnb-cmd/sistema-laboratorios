@@ -20,8 +20,8 @@
 
     <li class="nav-item" role="presentation">
         <button class="nav-link text-warning" id="notificaciones-tab" data-bs-toggle="tab" data-bs-target="#notificaciones" type="button" role="tab">
-            Notificaciones{% if es_admin %}{% else %}{% endif %}
-            {% if notificaciones or alertas %}<span class="badge bg-danger">{{ (notificaciones|length) + (alertas|length) }}</span>{% endif %}
+            Notificaciones {% if es_admin %}Admin{% else %}Docente{% endif %}
+            {% if total_notifs > 0 %}<span class="badge bg-danger">{{ total_notifs }}</span>{% endif %}
         </button>
     </li>
 
@@ -48,24 +48,16 @@
 
         <form action="/agendar" method="POST" class="mt-3">
             <div class="row mb-3">
-                <div class="col-md-5">
+                <div class="col-md-6">
                     <label class="form-label text-white">Laboratorio / Recurso</label>
-                    <select class="form-select ghost-input" name="laboratorio" id="selectLaboratorio" onchange="verificarCantidadEquipos()" required>
+                    <select class="form-select ghost-input" name="laboratorio" required>
                         <option value="Laboratorio de Computación">Laboratorio de Computación</option>
-                        <option value="Laboratorio Móvil 1">Laboratorio Móvil 1 (Elige cantidad)</option>
-                        <option value="Laboratorio Móvil 2">Laboratorio Móvil 2 (Elige cantidad)</option>
                         <option value="Laboratorio Móvil Completo">Lab. Móvil Completo (40 tablets)</option>
                         <option value="Pantalla Digital 1">Pantalla Digital 1</option>
                         <option value="Pantalla Digital 2">Pantalla Digital 2</option>
                     </select>
                 </div>
-
-                <div class="col-md-2" id="cajaCantidadEquipos" style="display: none;">
-                    <label class="form-label text-warning">Nº Equipos</label>
-                    <input type="number" class="form-control ghost-input border-warning" name="cantidad_equipos" id="inputCantidadEquipos" min="1" max="20" placeholder="Máx 20">
-                </div>
-
-                <div class="col-md-5" id="cajaFecha">
+                <div class="col-md-6">
                     <label class="form-label text-white">Día de Inicio (Lunes a Viernes)</label>
                     <input type="date" class="form-control ghost-input" name="fecha" id="fechaReserva" required>
                 </div>
@@ -108,6 +100,9 @@
     </div>
 
     <div class="tab-pane fade" id="vista-calendario" role="tabpanel">
+        <div class="alert alert-info mt-3 border-0" style="background: rgba(13, 202, 240, 0.2); color: white;">
+            <small>💡 <strong>Tip:</strong> Si necesitas un bloque que ya está ocupado, haz clic sobre él en el calendario para solicitarle el cambio al docente.</small>
+        </div>
         <div class="p-3 mt-3 ghost-card" style="min-height: 600px;">
             <div id='calendar'></div>
         </div>
@@ -116,7 +111,7 @@
     {% if es_admin %}
     <div class="tab-pane fade" id="recepcion" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mt-3 mb-3">
-            <h4 class="text-white">Agendas de Hoy (Móviles)</h4>
+            <h4 class="text-white">Agendas de Hoy (Móvil Completo)</h4>
             <button type="button" class="btn btn-outline-light btn-sm" onclick="abrirFormularioManual()">+ Recepción Manual</button>
         </div>
 
@@ -128,10 +123,9 @@
             <div class="col-md-6 mb-2">
                 <div class="list-group-item ghost-card text-white p-3 d-flex justify-content-between align-items-center" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2);">
                     <div>
-                        <strong class="text-info">{{ r.laboratorio }} {% if r.cantidad_equipos > 0 %}({{ r.cantidad_equipos }} eq.){% endif %}</strong><br>
+                        <strong class="text-info">{{ r.laboratorio }}</strong><br>
                         <small>🕒 {{ r.bloque }} | 👤 {{ r.usuario }}</small>
                     </div>
-
                     {% if not recepcion_existente %}
                     <button type="button" class="btn btn-success btn-sm ghost-btn" onclick="prepararRecepcion('{{ r.usuario }}', '{{ r.laboratorio }}')">Revisar 👉</button>
                     {% else %}
@@ -143,7 +137,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info mb-4" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay reservas de móviles agendadas para el día de hoy, o todas ya fueron archivadas.</div>
+        <div class="alert alert-info mb-4" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay reservas de móviles agendadas para el día de hoy, o ya fueron revisadas.</div>
         {% endif %}
 
         <div id="cajaFormularioRecepcion" style="display: none; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
@@ -184,7 +178,7 @@
                 </div>
                 <div class="row mb-3" id="cajaComentarioAdmin" style="display: none;">
                     <div class="col-12">
-                        <label class="form-label text-warning">Observaciones sobre daños o faltantes (Visible para el Docente)</label>
+                        <label class="form-label text-warning">Observaciones sobre daños o faltantes</label>
                         <textarea class="form-control ghost-input border-warning" name="comentario_admin" id="inputComentarioAdmin" rows="2"></textarea>
                     </div>
                 </div>
@@ -196,9 +190,28 @@
 
     <div class="tab-pane fade" id="notificaciones" role="tabpanel">
         {% if es_admin %}
-        <h4 class="text-white mt-3">Bandeja de Control de Entregas</h4>
+        <h4 class="text-white mt-3">Notificaciones Administrativas</h4>
+
+        {% if solicitudes_admin %}
+        <h5 class="text-warning mt-4">🔄 Solicitudes de Cambio de Agenda (Pendiente de Ejecutar)</h5>
+        <div class="list-group mb-4">
+            {% for sol in solicitudes_admin %}
+            <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(255,193,7,0.15); border: 1px solid rgba(255,193,7,0.3);">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1 text-warning">Cambio: {{ sol.laboratorio }} ({{ sol.fecha_reserva }} | {{ sol.bloque_reserva }})</h6>
+                    <form action="/completar_cambio_admin/{{ sol.id }}" method="POST">
+                        <button type="submit" class="btn btn-sm btn-success">✅ Efectuar y Notificar</button>
+                    </form>
+                </div>
+                <p class="mb-1">El docente <strong>{{ sol.docente_titular }}</strong> aprobó ceder su espacio a <strong>{{ sol.docente_solicitante }}</strong>.</p>
+                <p class="mb-0 text-white-50"><small>Mensaje del titular: "{{ sol.mensaje_respuesta }}"</small></p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         {% if alertas %}
-        <h5 class="text-danger mt-4">⚠️ Alertas de Inconformidad</h5>
+        <h5 class="text-danger mt-4">⚠️ Alertas de Inconformidad en Recepción</h5>
         <div class="list-group mb-4">
             {% for alerta in alertas %}
             <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(220,53,69,0.15); border: 1px solid rgba(220,53,69,0.3);">
@@ -212,7 +225,7 @@
         </div>
         {% endif %}
 
-        <h5 class="text-info mt-4">Respuestas Recientes</h5>
+        <h5 class="text-info mt-4">Recepciones Docentes (Firma Finalizada)</h5>
         {% if notificaciones %}
         <div class="list-group mt-3">
             {% for notif in notificaciones %}
@@ -229,25 +242,79 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay respuestas nuevas.</div>
+        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay firmas nuevas.</div>
         {% endif %}
+
         {% else %}
-        <h4 class="text-white mt-3">Bandeja de Entrada Docente</h4>
+        <h4 class="text-white mt-3">Bandeja de Notificaciones Docente</h4>
+
+        {% if solicitudes_recibidas %}
+        <h5 class="text-warning mt-4">🤝 Solicitudes de Cambio de Agenda</h5>
+        <div class="list-group mb-4">
+            {% for sol in solicitudes_recibidas %}
+            <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(255,193,7,0.15); border: 1px solid rgba(255,193,7,0.3);">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1 text-warning">Te piden: {{ sol.laboratorio }} ({{ sol.fecha_reserva }} | {{ sol.bloque_reserva }})</h6>
+                </div>
+                <p class="mb-2">El docente <strong>{{ sol.docente_solicitante }}</strong> te solicita este espacio. Mensaje: "{{ sol.mensaje_solicitud }}"</p>
+
+                <form action="/responder_cambio/{{ sol.id }}" method="POST">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control form-control-sm ghost-input" name="mensaje_respuesta" placeholder="Escribe tu respuesta (Opcional si apruebas, Obligatorio si rechazas)" required>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button type="submit" name="decision" value="Rechazar" class="btn btn-sm btn-outline-danger">Rechazar</button>
+                            <button type="submit" name="decision" value="Aprobar" class="btn btn-sm btn-success">Aprobar Cambio</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if solicitudes_respuestas %}
+        <h5 class="text-info mt-4">📩 Actualizaciones de Agenda</h5>
+        <div class="list-group mb-4">
+            {% for sol in solicitudes_respuestas %}
+            <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(255,255,255,0.1); border: none;">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">
+                        {% if sol.estado == 'Rechazado_Docente' %}<span class="text-danger">❌ Solicitud Rechazada</span>
+                        {% elif sol.estado == 'Completado_Admin' %}<span class="text-success">✅ Cambio Efectuado Oficialmente</span>{% endif %}
+                    </h6>
+                    <form action="/archivar_cambio/{{ sol.id }}" method="POST"><button type="submit" class="btn btn-sm btn-outline-light">Entendido ✔️</button></form>
+                </div>
+                <p class="mb-1">Sobre el laboratorio {{ sol.laboratorio }} del {{ sol.fecha_reserva }} a las {{ sol.bloque_reserva }}.</p>
+                {% if sol.estado == 'Rechazado_Docente' %}
+                <p class="mb-0 text-white-50"><small>{{ sol.docente_titular }} respondió: "{{ sol.mensaje_respuesta }}"</small></p>
+                {% elif sol.estado == 'Completado_Admin' %}
+                <p class="mb-0 text-white-50"><small>UTP/Administración ya realizó el traspaso en el sistema a nombre de {{ sol.docente_solicitante }}.</small></p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         {% if notificaciones %}
+        <h5 class="text-white mt-4">📝 Firma de Recepciones Técnicas</h5>
         <div class="list-group mt-3">
             {% for notif in notificaciones %}
             <div class="list-group-item ghost-card text-white mb-2" style="background: rgba(255,255,255,0.1); border: none;">
                 <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1">Revisión de Equipos - {{ notif.fecha }}</h5>
+                    <h6 class="mb-1">Revisión de Equipos - {{ notif.fecha }}</h6>
                     <small class="text-warning">Requiere Firma</small>
                 </div>
-                <p class="mb-1">El administrador ha marcado esta recepción como <strong>{{ notif.estado }}</strong>.</p>
+                <p class="mb-1">Administración ha marcado la recepción como <strong>{{ notif.estado }}</strong>.</p>
                 <button type="button" class="btn btn-outline-light btn-sm mt-2" data-bs-toggle="modal" data-bs-target="#modalRecepcion{{ notif.id }}">Ver Reporte y Firmar</button>
             </div>
             {% endfor %}
         </div>
-        {% else %}
-        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No tienes recepciones pendientes por revisar.</div>
+        {% endif %}
+
+        {% if not solicitudes_recibidas and not solicitudes_respuestas and not notificaciones %}
+        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">Tu bandeja de notificaciones está limpia.</div>
         {% endif %}
         {% endif %}
     </div>
@@ -258,101 +325,40 @@
             <h4 class="text-white m-0">Historial de Agendas</h4>
             <a href="{{ url_for('exportar_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Todo Excel</a>
         </div>
-
         <div class="ghost-card p-3 mb-4" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
             <form method="GET" action="/dashboard" class="row g-3 align-items-end">
-                <input type="hidden" name="tab" value="historial"> <div class="col-md-4">
-                <label class="form-label text-white-50"><small>Filtrar por Docente</small></label>
-                <select class="form-select ghost-input form-select-sm" name="filtro_docente">
-                    <option value="">Todos los docentes</option>
-                    {% for d in docentes %}
-                    <option value="{{ d.name }}" {% if request.args.get('filtro_docente') == d.name %}selected{% endif %}>{{ d.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+                <input type="hidden" name="tab" value="historial">
+                <div class="col-md-4">
+                    <label class="form-label text-white-50"><small>Filtrar por Docente</small></label>
+                    <select class="form-select ghost-input form-select-sm" name="filtro_docente">
+                        <option value="">Todos los docentes</option>
+                        {% for d in docentes %}<option value="{{ d.name }}" {% if request.args.get('filtro_docente') == d.name %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+                    </select>
+                </div>
                 <div class="col-md-4">
                     <label class="form-label text-white-50"><small>Filtrar por Día exacto</small></label>
                     <input type="date" class="form-control ghost-input form-control-sm" name="filtro_fecha" value="{{ request.args.get('filtro_fecha', '') }}">
                 </div>
                 <div class="col-md-4">
-                    <button type="submit" class="btn btn-info btn-sm fw-bold">🔍 Buscar Historial</button>
-                    <a href="/dashboard?tab=historial" class="btn btn-outline-light btn-sm ms-2">Limpiar / Ver Semana</a>
+                    <button type="submit" class="btn btn-info btn-sm fw-bold">🔍 Buscar</button>
+                    <a href="/dashboard?tab=historial" class="btn btn-outline-light btn-sm ms-2">Limpiar</a>
                 </div>
             </form>
-            {% if not request.args.get('filtro_docente') and not request.args.get('filtro_fecha') %}
-            <div class="mt-2 text-warning"><small>* Mostrando únicamente las reservas de la semana en curso. Usa el filtro para ver fechas antiguas.</small></div>
-            {% else %}
-            <div class="mt-2 text-success"><small>* Mostrando resultados históricos según el filtro aplicado.</small></div>
-            {% endif %}
         </div>
-
         <div class="table-responsive mb-5">
             <table class="table text-white table-sm" style="font-size: 0.9em;">
                 <thead>
                 <tr style="background: rgba(255,255,255,0.1);">
-                    <th>Fecha</th>
-                    <th>Laboratorio/Recurso</th>
-                    <th>Horario</th>
-                    <th>Docente</th>
-                    <th>Uso</th>
-                    <th>Acciones</th>
+                    <th>Fecha</th><th>Recurso</th><th>Horario</th><th>Docente</th><th>Uso</th><th>Acciones</th>
                 </tr>
                 </thead>
                 <tbody>
                 {% for r in reservas %}
                 <tr>
-                    <td>{{ r.fecha }}</td>
-                    <td>{{ r.laboratorio }} {% if r.cantidad_equipos > 0 %}({{r.cantidad_equipos}}){% endif %}</td>
-                    <td>{{ r.bloque }}</td>
-                    <td>{{ r.usuario }}</td>
-                    <td>{{ r.comentario }}</td>
+                    <td>{{ r.fecha }}</td><td>{{ r.laboratorio }}</td><td>{{ r.bloque }}</td><td>{{ r.usuario }}</td><td>{{ r.comentario }}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-bs-toggle="modal" data-bs-target="#modalEditarReserva{{ r.id }}">✏️</button>
-                        <form action="/eliminar_reserva/{{ r.id }}" method="POST" style="display:inline;">
-                            <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="return confirm('¿Seguro que deseas eliminar esta reserva?');">❌</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <hr style="border-color: rgba(255,255,255,0.2);">
-
-        <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
-            <h4 class="text-white m-0">Últimas 100 Recepciones</h4>
-            <a href="{{ url_for('exportar_recepciones_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Todo Excel</a>
-        </div>
-        <div class="table-responsive">
-            <table class="table text-white table-sm" style="font-size: 0.9em;">
-                <thead>
-                <tr style="background: rgba(255,255,255,0.1);">
-                    <th>Fecha</th>
-                    <th>Docente</th>
-                    <th>Laboratorio</th>
-                    <th>Entregó/Recibió</th>
-                    <th>Equipos</th>
-                    <th>Estado Final</th>
-                    <th>Comentarios</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for r in recepciones %}
-                <tr>
-                    <td>{{ r.fecha }}</td>
-                    <td>{{ r.docente }}</td>
-                    <td>{{ r.laboratorio }}</td>
-                    <td>{{ r.hora_entrega }} - {{ r.hora_recepcion }}</td>
-                    <td>{{ r.equipos_recepcionados }}</td>
-                    <td>
-                        {% if r.conforme == 'Pendiente' %}<span class="badge bg-warning text-dark">Pendiente de Firma</span>
-                        {% elif r.conforme == 'Si' %}<span class="badge bg-success">{{ r.estado|capitalize }} / Conforme</span>
-                        {% else %}<span class="badge bg-danger">{{ r.estado|capitalize }} / Inconforme</span>{% endif %}
-                    </td>
-                    <td>
-                        {% if r.comentario_admin %}<small class="text-warning">A: {{ r.comentario_admin }}</small><br>{% endif %}
-                        {% if r.comentario_docente %}<small class="text-info">D: {{ r.comentario_docente }}</small>{% endif %}
+                        <form action="/eliminar_reserva/{{ r.id }}" method="POST" style="display:inline;"><button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="return confirm('¿Seguro que deseas eliminar esta reserva?');">❌</button></form>
                     </td>
                 </tr>
                 {% endfor %}
@@ -361,7 +367,32 @@
         </div>
     </div>
     {% endif %}
+</div>
 
+<div class="modal fade" id="modalSolicitarCambio" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-dark" style="background: #e9ecef;">
+            <div class="modal-header">
+                <h5 class="modal-title text-warning">🤝 Solicitar Cambio de Agenda</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="/solicitar_cambio" method="POST">
+                <div class="modal-body">
+                    <p>Esta agenda ya está tomada. Puedes enviarle una solicitud al docente titular para que te la ceda.</p>
+                    <p><strong>Recurso solicitado:</strong> <span id="texto_solicitud_detalle" class="text-primary fw-bold"></span></p>
+                    <input type="hidden" name="reserva_id" id="solicitud_reserva_id">
+
+                    <div class="mt-3">
+                        <label>Mensaje para el colega:</label>
+                        <textarea class="form-control" name="mensaje_solicitud" rows="2" placeholder="Ej: Colega, ¿me podrías ceder este bloque para una evaluación? Te lo agradecería mucho." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-warning">Enviar Solicitud</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 {% if not es_admin and notificaciones %}
@@ -371,39 +402,18 @@
         <div class="modal-content text-dark" style="background: #e9ecef;">
             <div class="modal-header">
                 <h5 class="modal-title">Firma de Recepción - {{ notif.fecha }}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form action="/responder_recepcion/{{ notif.id }}" method="POST">
                 <div class="modal-body">
                     <p><strong>Recurso:</strong> {{ notif.laboratorio }}</p>
-                    <p><strong>Hora que entregaste:</strong> <input type="time" class="form-control form-control-sm" value="{{ notif.hora_entrega }}" readonly></p>
-                    <p><strong>Hora de revisión:</strong> <input type="time" class="form-control form-control-sm" value="{{ notif.hora_recepcion }}" readonly></p>
-                    <p><strong>Equipos recepcionados:</strong> <input type="number" class="form-control form-control-sm" value="{{ notif.equipos_recepcionados }}" readonly></p>
-                    <p><strong>Estado dictaminado:</strong> <input type="text" class="form-control form-control-sm text-{{ 'danger' if notif.estado == 'incompleto' else 'success' }} fw-bold" value="{{ notif.estado|capitalize }}" readonly></p>
-
-                    {% if notif.estado == 'incompleto' and notif.comentario_admin %}
-                    <div class="alert alert-danger p-2">
-                        <strong>Observación del Admin:</strong> {{ notif.comentario_admin }}
-                    </div>
-                    {% endif %}
-                    <hr>
-                    <p><strong>¿Estás conforme con este reporte?</strong></p>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="respuesta" id="si{{ notif.id }}" value="Si" required onclick="document.getElementById('cajaComentario{{ notif.id }}').style.display='none'">
-                        <label class="form-check-label" for="si{{ notif.id }}">Sí, conforme</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="respuesta" id="no{{ notif.id }}" value="No" onclick="document.getElementById('cajaComentario{{ notif.id }}').style.display='block'">
-                        <label class="form-check-label" for="no{{ notif.id }}">No estoy conforme</label>
-                    </div>
-                    <div class="mt-3" id="cajaComentario{{ notif.id }}" style="display: none;">
-                        <label>Justifica tu inconformidad:</label>
-                        <textarea class="form-control" name="comentario_docente" rows="2"></textarea>
-                    </div>
+                    <p><strong>Equipos:</strong> {{ notif.equipos_recepcionados }} ({{ notif.estado|capitalize }})</p>
+                    {% if notif.estado == 'incompleto' %}<div class="alert alert-danger p-2">{{ notif.comentario_admin }}</div>{% endif %}
+                    <p><strong>¿Conforme?</strong></p>
+                    <input type="radio" name="respuesta" value="Si" required> Sí
+                    <input type="radio" name="respuesta" value="No"> No
                 </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Firmar y Enviar</button>
-                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary">Firmar</button></div>
             </form>
         </div>
     </div>
@@ -415,40 +425,17 @@
 {% for r in reservas %}
 <div class="modal fade" id="modalEditarReserva{{ r.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content text-dark" style="background: #e9ecef;">
-            <div class="modal-header">
-                <h5 class="modal-title">Editar Reserva</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
+        <div class="modal-content text-dark">
             <form action="/editar_reserva/{{ r.id }}" method="POST">
                 <div class="modal-body">
-                    <div class="mb-2">
-                        <label class="form-label">Laboratorio</label>
-                        <select class="form-select form-select-sm" name="laboratorio" required>
-                            <option value="Laboratorio de Computación" {% if r.laboratorio == 'Laboratorio de Computación' %}selected{% endif %}>Laboratorio de Computación</option>
-                            <option value="Laboratorio Móvil 1" {% if r.laboratorio == 'Laboratorio Móvil 1' %}selected{% endif %}>Laboratorio Móvil 1 (20 tablets)</option>
-                            <option value="Laboratorio Móvil 2" {% if r.laboratorio == 'Laboratorio Móvil 2' %}selected{% endif %}>Laboratorio Móvil 2 (20 tablets)</option>
-                            <option value="Laboratorio Móvil Completo" {% if r.laboratorio == 'Laboratorio Móvil Completo' %}selected{% endif %}>Lab. Móvil Completo (40 tablets)</option>
-                            <option value="Pantalla Digital 1" {% if r.laboratorio == 'Pantalla Digital 1' %}selected{% endif %}>Pantalla Digital 1</option>
-                            <option value="Pantalla Digital 2" {% if r.laboratorio == 'Pantalla Digital 2' %}selected{% endif %}>Pantalla Digital 2</option>
-                        </select>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Fecha</label>
-                        <input type="date" class="form-control form-control-sm" name="fecha" value="{{ r.fecha }}" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Bloque Horario</label>
-                        <input type="text" class="form-control form-control-sm" name="horarioBloque" value="{{ r.bloque }}" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label">Comentario</label>
-                        <textarea class="form-control form-control-sm" name="comentario" rows="2" required>{{ r.comentario }}</textarea>
-                    </div>
+                    <select name="laboratorio" class="form-select">
+                        <option value="Laboratorio de Computación">Laboratorio de Computación</option>
+                        <option value="Laboratorio Móvil Completo">Lab. Móvil Completo</option>
+                    </select>
+                    <input type="date" name="fecha" value="{{ r.fecha }}">
+                    <input type="text" name="horarioBloque" value="{{ r.bloque }}">
                 </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar</button></div>
             </form>
         </div>
     </div>
@@ -457,35 +444,12 @@
 {% endif %}
 
 <script>
-    function verificarCantidadEquipos() {
-        var lab = document.getElementById('selectLaboratorio').value;
-        var cajaCantidad = document.getElementById('cajaCantidadEquipos');
-        var inputCantidad = document.getElementById('inputCantidadEquipos');
-        var cajaFecha = document.getElementById('cajaFecha');
-        if (lab === 'Laboratorio Móvil 1' || lab === 'Laboratorio Móvil 2') {
-            cajaCantidad.style.display = 'block';
-            inputCantidad.required = true;
-            cajaFecha.classList.replace('col-md-5', 'col-md-3');
-        } else {
-            cajaCantidad.style.display = 'none';
-            inputCantidad.required = false;
-            inputCantidad.value = '';
-            cajaFecha.classList.replace('col-md-3', 'col-md-5');
-        }
-    }
-
     function verificarComentarioAdmin() {
         var estado = document.getElementById('estadoRecepcionForm').value;
         var caja = document.getElementById('cajaComentarioAdmin');
         var input = document.getElementById('inputComentarioAdmin');
-        if (estado === 'incompleto') {
-            caja.style.display = 'block';
-            input.required = true;
-        } else {
-            caja.style.display = 'none';
-            input.required = false;
-            input.value = '';
-        }
+        if (estado === 'incompleto') { caja.style.display = 'block'; input.required = true; }
+        else { caja.style.display = 'none'; input.required = false; input.value = ''; }
     }
 
     function prepararRecepcion(nombreDocente, nombreLab) {
@@ -502,43 +466,39 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        // --- NUEVO: TRUCO PARA MANTENER LA PESTAÑA AL FILTRAR ---
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('tab') === 'historial') {
-            var triggerEl = document.querySelector('#historial-tab');
-            if(triggerEl) {
-                var tab = new bootstrap.Tab(triggerEl);
-                tab.show();
-            }
+            var tab = new bootstrap.Tab(document.querySelector('#historial-tab'));
+            if(tab) tab.show();
         }
-        // ---------------------------------------------------------
 
         var calendarEl = document.getElementById('calendar');
         var calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'timeGridWeek',
-            locale: 'es',
-            buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día', list: 'Agenda' },
+            initialView: 'timeGridWeek', locale: 'es',
             headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
-            hiddenDays: [0, 6],
-            slotMinTime: '08:00:00',
-            slotMaxTime: '18:00:00',
-            allDaySlot: false,
+            hiddenDays: [0, 6], slotMinTime: '08:00:00', slotMaxTime: '18:00:00', allDaySlot: false,
             events: '/api/reservas',
+
+            // --- NUEVA LÓGICA DE CLIC EN CALENDARIO ---
             eventClick: function(info) {
-                alert('Detalles de la Reserva:\n\n' + info.event.title + '\nComentario: ' + info.event.extendedProps.description);
+                var usuarioActivo = "{{ session['nombre'] }}";
+                var esAdmin = "{{ es_admin }}" === "True";
+
+                // Si el evento NO es del usuario activo y no es Admin, le permite solicitar el cambio
+                if (info.event.extendedProps.usuario !== usuarioActivo && !esAdmin) {
+                    document.getElementById('solicitud_reserva_id').value = info.event.id;
+                    document.getElementById('texto_solicitud_detalle').innerText = info.event.title + " | Día: " + info.event.start.toLocaleDateString();
+                    var modal = new bootstrap.Modal(document.getElementById('modalSolicitarCambio'));
+                    modal.show();
+                } else {
+                    alert('Detalles de la Reserva:\n\n' + info.event.title + '\nComentario: ' + info.event.extendedProps.description);
+                }
             }
         });
         calendar.render();
         const tabCalendario = document.getElementById('calendario-tab');
         if (tabCalendario) tabCalendario.addEventListener('shown.bs.tab', function () { calendar.updateSize(); });
     });
-
-    const fechaInput = document.getElementById('fechaReserva');
-    if(fechaInput) {
-        fechaInput.addEventListener('change', function(e){
-            if([6,0].includes(new Date(this.value).getUTCDay())){ alert("Solo de Lunes a Viernes."); this.value = ''; }
-        });
-    }
 
     const bloques45 = ["08:00 - 08:45", "08:45 - 09:30", "09:45 - 10:30", "10:30 - 11:15", "11:30 - 12:15", "12:15 - 13:00", "14:00 - 14:45", "14:45 - 15:30", "15:40 - 16:25", "16:25 - 17:10"];
     const bloques90 = ["08:00 - 09:30", "09:45 - 11:15", "11:30 - 13:00", "14:00 - 15:30", "15:40 - 17:10"];
