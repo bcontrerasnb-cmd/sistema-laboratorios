@@ -91,7 +91,7 @@ mmontecino@colegioconcepcionlinares.cl
 gerardina stolfi
 Profesora de idiomas
 gstolfi@colegioconcepcionlinares.cl
-Evelyn Valdés Poblete
+Evelin Valdés Poblete
 Profesora de Química
 evaldes@colegioconcepcionlinares.cl
 Ramón cordova olea
