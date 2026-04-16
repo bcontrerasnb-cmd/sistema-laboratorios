@@ -22,7 +22,7 @@ class User(db.Model):
 class Reserva(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     laboratorio = db.Column(db.String(50), nullable=False)
-    cantidad_equipos = db.Column(db.Integer, default=0) # Obsoleto pero se mantiene para no romper DB
+    cantidad_equipos = db.Column(db.Integer, default=0)
     fecha = db.Column(db.String(20), nullable=False)
     bloque = db.Column(db.String(50), nullable=False)
     usuario = db.Column(db.String(100), nullable=False)
@@ -42,7 +42,6 @@ class Recepcion(db.Model):
     comentario_admin = db.Column(db.String(200))
     archivada_admin = db.Column(db.Boolean, default=False)
 
-# NUEVO MODELO: Solicitudes de Cambio de Agenda
 class SolicitudCambio(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reserva_id = db.Column(db.Integer, nullable=False)
@@ -52,11 +51,19 @@ class SolicitudCambio(db.Model):
     fecha_reserva = db.Column(db.String(20))
     bloque_reserva = db.Column(db.String(50))
     mensaje_solicitud = db.Column(db.String(300))
-    estado = db.Column(db.String(50), default='Pendiente_Docente') # Pendiente_Docente, Aprobado_Docente, Rechazado_Docente, Completado_Admin
+    estado = db.Column(db.String(50), default='Pendiente_Docente')
     mensaje_respuesta = db.Column(db.String(300))
     archivada_solicitante = db.Column(db.Boolean, default=False)
     archivada_titular = db.Column(db.Boolean, default=False)
     archivada_admin = db.Column(db.Boolean, default=False)
+
+# NUEVO MODELO: Agendas Liberadas para el Banner
+class AgendaLiberada(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    laboratorio = db.Column(db.String(50), nullable=False)
+    fecha = db.Column(db.String(20), nullable=False)
+    bloque = db.Column(db.String(50), nullable=False)
+    liberada_por = db.Column(db.String(100))
 
 # --- RUTAS PRINCIPALES ---
 @app.route('/')
@@ -89,19 +96,14 @@ def dashboard():
     hoy_str = hoy_obj.strftime('%Y-%m-%d')
     nombre_user = session['nombre']
 
-    # Filtro de móviles para Recepción (Ahora solo el Completo)
-    reservas_hoy = Reserva.query.filter(
-        Reserva.fecha == hoy_str,
-        Reserva.laboratorio == 'Laboratorio Móvil Completo'
-    ).order_by(Reserva.bloque.asc()).all()
+    # BANNER: Buscar Agendas Liberadas vigentes (de hoy en adelante)
+    agendas_liberadas = AgendaLiberada.query.filter(AgendaLiberada.fecha >= hoy_str).order_by(AgendaLiberada.fecha.asc()).all()
 
+    reservas_hoy = Reserva.query.filter(Reserva.fecha == hoy_str, Reserva.laboratorio == 'Laboratorio Móvil Completo').order_by(Reserva.bloque.asc()).all()
     reps_hoy = Recepcion.query.filter_by(fecha=hoy_str).all()
     mapa_recepciones = {(r.docente, r.laboratorio): r for r in reps_hoy}
 
-    # NOTIFICACIONES Y SOLICITUDES
-    solicitudes_admin = []
-    solicitudes_recibidas = []
-    solicitudes_respuestas = []
+    solicitudes_admin, solicitudes_recibidas, solicitudes_respuestas = [], [], []
 
     if es_admin:
         alertas_admin = Recepcion.query.filter_by(conforme='No', archivada_admin=False).all()
@@ -112,11 +114,7 @@ def dashboard():
         notificaciones_pendientes = Recepcion.query.filter_by(docente=nombre_user, estado='completo', conforme='Pendiente').all()
         notificaciones_incompletas = Recepcion.query.filter_by(docente=nombre_user, estado='incompleto', conforme='Pendiente').all()
         notificaciones_pendientes.extend(notificaciones_incompletas)
-
-        # Solicitudes que me piden a mi
         solicitudes_recibidas = SolicitudCambio.query.filter_by(docente_titular=nombre_user, estado='Pendiente_Docente').all()
-
-        # Solicitudes que ya fueron respondidas o completadas y me involucran
         solicitudes_respuestas = SolicitudCambio.query.filter(
             ((SolicitudCambio.docente_solicitante == nombre_user) & (SolicitudCambio.archivada_solicitante == False)) |
             ((SolicitudCambio.docente_titular == nombre_user) & (SolicitudCambio.archivada_titular == False))
@@ -125,7 +123,6 @@ def dashboard():
     lista_docentes = User.query.filter(User.username != 'admin').order_by(User.name).all()
     todas_las_recepciones = Recepcion.query.order_by(Recepcion.fecha.desc()).limit(100).all()
 
-    # Filtros para historial
     filtro_docente = request.args.get('filtro_docente')
     filtro_fecha = request.args.get('filtro_fecha')
     query_reservas = Reserva.query
@@ -138,7 +135,6 @@ def dashboard():
         query_reservas = query_reservas.filter(Reserva.fecha >= inicio_semana.strftime('%Y-%m-%d'), Reserva.fecha <= fin_semana.strftime('%Y-%m-%d'))
     todas_las_reservas = query_reservas.order_by(Reserva.fecha.asc(), Reserva.bloque.asc()).all()
 
-    # Calculamos el total de notificaciones para la burbuja roja
     total_notifs = len(notificaciones_pendientes) + len(alertas_admin) + len(solicitudes_admin) + len(solicitudes_recibidas) + len(solicitudes_respuestas)
 
     return render_template('dashboard.html',
@@ -147,9 +143,10 @@ def dashboard():
                            solicitudes_admin=solicitudes_admin, solicitudes_recibidas=solicitudes_recibidas,
                            solicitudes_respuestas=solicitudes_respuestas, total_notifs=total_notifs,
                            docentes=lista_docentes, reservas=todas_las_reservas,
-                           recepciones=todas_las_recepciones, reservas_hoy=reservas_hoy, es_admin=es_admin)
+                           recepciones=todas_las_recepciones, reservas_hoy=reservas_hoy, es_admin=es_admin,
+                           agendas_liberadas=agendas_liberadas) # <-- Pasamos el banner
 
-# --- RUTAS DE AGENDAMIENTO Y EDICIÓN ---
+# --- RUTAS DE AGENDAMIENTO, EDICIÓN Y ELIMINACIÓN ---
 @app.route('/agendar', methods=['POST'])
 def agendar():
     if 'usuario' not in session: return redirect(url_for('login'))
@@ -216,27 +213,61 @@ def editar_reserva(id):
 
 @app.route('/eliminar_reserva/<int:id>', methods=['POST'])
 def eliminar_reserva(id):
-    if session.get('usuario') not in ADMINISTRADORES: return redirect(url_for('dashboard'))
+    if 'usuario' not in session: return redirect(url_for('login'))
     reserva = Reserva.query.get_or_404(id)
-    db.session.delete(reserva)
-    db.session.commit()
-    flash('Reserva eliminada con éxito.', 'success')
+    es_admin = session['usuario'] in ADMINISTRADORES
+
+    # NUEVO: Validar que sea el creador o un admin
+    if es_admin or reserva.usuario == session['nombre']:
+        # Si la reserva es de hoy o del futuro, se va al Banner de Liberadas
+        hoy_str = datetime.now().strftime('%Y-%m-%d')
+        if reserva.fecha >= hoy_str:
+            liberada = AgendaLiberada(
+                laboratorio=reserva.laboratorio,
+                fecha=reserva.fecha,
+                bloque=reserva.bloque,
+                liberada_por=reserva.usuario
+            )
+            db.session.add(liberada)
+            flash('Reserva eliminada. El bloque ha sido liberado para otros docentes en el panel.', 'success')
+        else:
+            flash('Reserva histórica eliminada con éxito.', 'success')
+
+        db.session.delete(reserva)
+        db.session.commit()
+    else:
+        flash('No tienes permiso para eliminar la reserva de otro docente.', 'danger')
+
     return redirect(url_for('dashboard'))
 
-# --- RUTAS DE SOLICITUD DE CAMBIO (NUEVAS) ---
+# NUEVA RUTA: Tomar Agenda Liberada
+@app.route('/tomar_agenda_liberada/<int:id>', methods=['POST'])
+def tomar_agenda_liberada(id):
+    if 'usuario' not in session: return redirect(url_for('login'))
+    agenda_lib = AgendaLiberada.query.get_or_404(id)
+
+    # Crear nueva reserva a nombre del usuario actual
+    nueva_reserva = Reserva(
+        laboratorio=agenda_lib.laboratorio,
+        fecha=agenda_lib.fecha,
+        bloque=agenda_lib.bloque,
+        usuario=session['nombre'],
+        comentario="Agenda tomada de un bloque liberado rápidamente"
+    )
+    db.session.add(nueva_reserva)
+    db.session.delete(agenda_lib) # La borramos del banner
+    db.session.commit()
+    flash('¡Felicidades! Has tomado la agenda liberada con éxito.', 'success')
+    return redirect(url_for('dashboard'))
+
+# --- RUTAS DE SOLICITUD DE CAMBIO ---
 @app.route('/solicitar_cambio', methods=['POST'])
 def solicitar_cambio():
     if 'usuario' not in session: return redirect(url_for('login'))
-    reserva_id = request.form.get('reserva_id')
-    reserva = Reserva.query.get_or_404(reserva_id)
-
+    reserva = Reserva.query.get_or_404(request.form.get('reserva_id'))
     nueva_solicitud = SolicitudCambio(
-        reserva_id=reserva.id,
-        docente_solicitante=session['nombre'],
-        docente_titular=reserva.usuario,
-        laboratorio=reserva.laboratorio,
-        fecha_reserva=reserva.fecha,
-        bloque_reserva=reserva.bloque,
+        reserva_id=reserva.id, docente_solicitante=session['nombre'], docente_titular=reserva.usuario,
+        laboratorio=reserva.laboratorio, fecha_reserva=reserva.fecha, bloque_reserva=reserva.bloque,
         mensaje_solicitud=request.form.get('mensaje_solicitud')
     )
     db.session.add(nueva_solicitud)
@@ -246,19 +277,15 @@ def solicitar_cambio():
 
 @app.route('/responder_cambio/<int:id>', methods=['POST'])
 def responder_cambio(id):
-    if 'usuario' not in session: return redirect(url_for('login'))
     solicitud = SolicitudCambio.query.get_or_404(id)
-    decision = request.form.get('decision')
-
     solicitud.mensaje_respuesta = request.form.get('mensaje_respuesta')
-    if decision == 'Aprobar':
+    if request.form.get('decision') == 'Aprobar':
         solicitud.estado = 'Aprobado_Docente'
         flash('Solicitud aprobada. Se notificó a UTP/Administración para efectuar el cambio.', 'success')
     else:
         solicitud.estado = 'Rechazado_Docente'
-        solicitud.archivada_titular = True # El que rechaza ya no necesita verla
+        solicitud.archivada_titular = True
         flash('Solicitud rechazada. Se notificó al solicitante.', 'warning')
-
     db.session.commit()
     return redirect(url_for('dashboard'))
 
@@ -266,22 +293,18 @@ def responder_cambio(id):
 def completar_cambio_admin(id):
     if session.get('usuario') not in ADMINISTRADORES: return redirect(url_for('dashboard'))
     solicitud = SolicitudCambio.query.get_or_404(id)
-
-    # Efectuar el traspaso en la reserva real
     reserva = Reserva.query.get(solicitud.reserva_id)
     if reserva:
         reserva.usuario = solicitud.docente_solicitante
         reserva.comentario = f"(Cambio cedido por {solicitud.docente_titular}) - {reserva.comentario}"
-
     solicitud.estado = 'Completado_Admin'
     solicitud.archivada_admin = True
     db.session.commit()
-    flash('Cambio de agenda realizado con éxito. Ambos docentes han sido notificados.', 'success')
+    flash('Cambio de agenda realizado con éxito.', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/archivar_cambio/<int:id>', methods=['POST'])
 def archivar_cambio(id):
-    if 'usuario' not in session: return redirect(url_for('login'))
     solicitud = SolicitudCambio.query.get_or_404(id)
     if session['nombre'] == solicitud.docente_solicitante: solicitud.archivada_solicitante = True
     if session['nombre'] == solicitud.docente_titular: solicitud.archivada_titular = True
@@ -366,7 +389,7 @@ def api_reservas():
                 'id': r.id, 'title': f"{r.laboratorio} - {r.usuario}",
                 'start': f"{r.fecha}T{inicio}:00", 'end': f"{r.fecha}T{fin}:00",
                 'description': r.comentario, 'color': color,
-                'usuario': r.usuario, 'laboratorio': r.laboratorio # Datos extra para JS
+                'usuario': r.usuario, 'laboratorio': r.laboratorio
             })
         except: pass
     return jsonify(eventos)
