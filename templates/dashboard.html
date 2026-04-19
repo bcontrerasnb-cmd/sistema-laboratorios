@@ -72,7 +72,7 @@
                     <select class="form-select ghost-input" name="laboratorio" required>
                         <option value="Laboratorio de Computación">Laboratorio de Computación</option>
                         <option value="Laboratorio Móvil Completo">Lab. Móvil Completo (40 tablets)</option>
-                        <option value="Pantalla Digital 1">Pantalla Digital 1</option>
+                        <option value="Mini Laboratorio">Mini Laboratorio</option> <option value="Pantalla Digital 1">Pantalla Digital 1</option>
                         <option value="Pantalla Digital 2">Pantalla Digital 2</option>
                     </select>
                 </div>
@@ -353,7 +353,12 @@
     <div class="modal-dialog"><div class="modal-content text-dark">
         <form action="/editar_reserva/{{ r.id }}" method="POST">
             <div class="modal-body">
-                <select name="laboratorio" class="form-select"><option value="Laboratorio de Computación" {% if r.laboratorio == 'Laboratorio de Computación' %}selected{% endif %}>Laboratorio de Computación</option><option value="Laboratorio Móvil Completo" {% if r.laboratorio == 'Laboratorio Móvil Completo' %}selected{% endif %}>Lab. Móvil Completo</option><option value="Pantalla Digital 1" {% if r.laboratorio == 'Pantalla Digital 1' %}selected{% endif %}>Pantalla Digital 1</option><option value="Pantalla Digital 2" {% if r.laboratorio == 'Pantalla Digital 2' %}selected{% endif %}>Pantalla Digital 2</option></select>
+                <select name="laboratorio" class="form-select">
+                    <option value="Laboratorio de Computación" {% if r.laboratorio == 'Laboratorio de Computación' %}selected{% endif %}>Laboratorio de Computación</option>
+                    <option value="Laboratorio Móvil Completo" {% if r.laboratorio == 'Laboratorio Móvil Completo' %}selected{% endif %}>Lab. Móvil Completo</option>
+                    <option value="Mini Laboratorio" {% if r.laboratorio == 'Mini Laboratorio' %}selected{% endif %}>Mini Laboratorio</option> <option value="Pantalla Digital 1" {% if r.laboratorio == 'Pantalla Digital 1' %}selected{% endif %}>Pantalla Digital 1</option>
+                    <option value="Pantalla Digital 2" {% if r.laboratorio == 'Pantalla Digital 2' %}selected{% endif %}>Pantalla Digital 2</option>
+                </select>
                 <input type="date" name="fecha" value="{{ r.fecha }}" class="form-control mt-2"><input type="text" name="horarioBloque" value="{{ r.bloque }}" class="form-control mt-2"><textarea name="comentario" class="form-control mt-2">{{ r.comentario }}</textarea>
             </div>
             <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar</button></div>
@@ -394,9 +399,9 @@
         var calendarEl = document.getElementById('calendar');
         var calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: 'timeGridWeek',
-            locale: 'es', // <--- Forzamos idioma español
+            locale: 'es',
             headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
-            buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día', list: 'Agenda' }, // <-- Textos manuales por si acaso
+            buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día', list: 'Agenda' },
             hiddenDays: [0, 6], slotMinTime: '08:00:00', slotMaxTime: '18:00:00', allDaySlot: false,
             events: '/api/reservas',
 

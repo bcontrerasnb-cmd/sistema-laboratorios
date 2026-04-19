@@ -10,7 +10,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres.imzdhutlbristfrfh
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-ADMINISTRADORES = ['admin', 'evaldes@colegioconcepcionlinares.cl', 'cmunoz@colegioconcepcionlinares.cl', 'utp@colegioconcepcionlinares.cl']
+# ACTUALIZADO: Nuevo correo de Marisela
+ADMINISTRADORES = ['admin', 'evaldes@colegioconcepcionlinares.cl', 'cmunoz@colegioconcepcionlinares.cl', 'mcastro@colegioconcepcionlinares.cl']
 
 # --- MODELOS DE BASE DE DATOS ---
 class User(db.Model):
@@ -57,7 +58,6 @@ class SolicitudCambio(db.Model):
     archivada_titular = db.Column(db.Boolean, default=False)
     archivada_admin = db.Column(db.Boolean, default=False)
 
-# NUEVO MODELO: Agendas Liberadas para el Banner
 class AgendaLiberada(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     laboratorio = db.Column(db.String(50), nullable=False)
@@ -96,9 +96,7 @@ def dashboard():
     hoy_str = hoy_obj.strftime('%Y-%m-%d')
     nombre_user = session['nombre']
 
-    # BANNER: Buscar Agendas Liberadas vigentes (de hoy en adelante)
     agendas_liberadas = AgendaLiberada.query.filter(AgendaLiberada.fecha >= hoy_str).order_by(AgendaLiberada.fecha.asc()).all()
-
     reservas_hoy = Reserva.query.filter(Reserva.fecha == hoy_str, Reserva.laboratorio == 'Laboratorio Móvil Completo').order_by(Reserva.bloque.asc()).all()
     reps_hoy = Recepcion.query.filter_by(fecha=hoy_str).all()
     mapa_recepciones = {(r.docente, r.laboratorio): r for r in reps_hoy}
@@ -144,7 +142,7 @@ def dashboard():
                            solicitudes_respuestas=solicitudes_respuestas, total_notifs=total_notifs,
                            docentes=lista_docentes, reservas=todas_las_reservas,
                            recepciones=todas_las_recepciones, reservas_hoy=reservas_hoy, es_admin=es_admin,
-                           agendas_liberadas=agendas_liberadas) # <-- Pasamos el banner
+                           agendas_liberadas=agendas_liberadas)
 
 # --- RUTAS DE AGENDAMIENTO, EDICIÓN Y ELIMINACIÓN ---
 @app.route('/agendar', methods=['POST'])
@@ -217,45 +215,30 @@ def eliminar_reserva(id):
     reserva = Reserva.query.get_or_404(id)
     es_admin = session['usuario'] in ADMINISTRADORES
 
-    # NUEVO: Validar que sea el creador o un admin
     if es_admin or reserva.usuario == session['nombre']:
-        # Si la reserva es de hoy o del futuro, se va al Banner de Liberadas
         hoy_str = datetime.now().strftime('%Y-%m-%d')
         if reserva.fecha >= hoy_str:
-            liberada = AgendaLiberada(
-                laboratorio=reserva.laboratorio,
-                fecha=reserva.fecha,
-                bloque=reserva.bloque,
-                liberada_por=reserva.usuario
-            )
+            liberada = AgendaLiberada(laboratorio=reserva.laboratorio, fecha=reserva.fecha, bloque=reserva.bloque, liberada_por=reserva.usuario)
             db.session.add(liberada)
             flash('Reserva eliminada. El bloque ha sido liberado para otros docentes en el panel.', 'success')
         else:
             flash('Reserva histórica eliminada con éxito.', 'success')
-
         db.session.delete(reserva)
         db.session.commit()
     else:
         flash('No tienes permiso para eliminar la reserva de otro docente.', 'danger')
-
     return redirect(url_for('dashboard'))
 
-# NUEVA RUTA: Tomar Agenda Liberada
 @app.route('/tomar_agenda_liberada/<int:id>', methods=['POST'])
 def tomar_agenda_liberada(id):
     if 'usuario' not in session: return redirect(url_for('login'))
     agenda_lib = AgendaLiberada.query.get_or_404(id)
-
-    # Crear nueva reserva a nombre del usuario actual
     nueva_reserva = Reserva(
-        laboratorio=agenda_lib.laboratorio,
-        fecha=agenda_lib.fecha,
-        bloque=agenda_lib.bloque,
-        usuario=session['nombre'],
-        comentario="Agenda tomada de un bloque liberado rápidamente"
+        laboratorio=agenda_lib.laboratorio, fecha=agenda_lib.fecha, bloque=agenda_lib.bloque,
+        usuario=session['nombre'], comentario="Agenda tomada de un bloque liberado rápidamente"
     )
     db.session.add(nueva_reserva)
-    db.session.delete(agenda_lib) # La borramos del banner
+    db.session.delete(agenda_lib)
     db.session.commit()
     flash('¡Felicidades! Has tomado la agenda liberada con éxito.', 'success')
     return redirect(url_for('dashboard'))
@@ -384,6 +367,7 @@ def api_reservas():
             color = '#3788d8'
             if 'Completo' in r.laboratorio: color = '#fd7e14'
             elif 'Pantalla' in r.laboratorio: color = '#dc3545'
+            elif 'Mini' in r.laboratorio: color = '#20c997' # NUEVO: Color verde turquesa para Mini Laboratorio
 
             eventos.append({
                 'id': r.id, 'title': f"{r.laboratorio} - {r.usuario}",
