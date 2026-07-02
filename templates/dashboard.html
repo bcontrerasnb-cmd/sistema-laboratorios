@@ -5,6 +5,7 @@
 
 <h2 class="text-white mb-4">Panel de Control</h2>
 
+<!-- Pestañas -->
 <ul class="nav nav-tabs ghost-tabs" id="myTab" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="agendar-tab" data-bs-toggle="tab" data-bs-target="#agendar" type="button" role="tab">Agendar Laboratorio</button>
@@ -32,6 +33,7 @@
 
 <div class="tab-content ghost-card p-4 mt-2" id="myTabContent">
 
+    <!-- BANNER DE AGENDAS LIBERADAS -->
     {% if agendas_liberadas %}
     <div class="alert alert-success shadow-lg mb-4" style="background: rgba(25, 135, 84, 0.2); border: 1px solid #198754; color: #fff;">
         <h5 class="alert-heading text-success fw-bold">📢 ¡Agendas Liberadas Disponibles!</h5>
@@ -53,6 +55,7 @@
     </div>
     {% endif %}
 
+    <!-- MÓDULO DE AGENDAMIENTO -->
     <div class="tab-pane fade show active" id="agendar" role="tabpanel">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -119,6 +122,7 @@
         </form>
     </div>
 
+    <!-- MÓDULO VISUAL DE CALENDARIO -->
     <div class="tab-pane fade" id="vista-calendario" role="tabpanel">
         <div class="alert alert-info mt-3 border-0" style="background: rgba(13, 202, 240, 0.2); color: white;">
             <small>💡 <strong>Tip:</strong> Haz clic en un bloque de otro profesor para solicitar un cambio. <strong>Si haces clic en tu propio bloque, podrás eliminarlo y liberarlo al colegio.</strong></small>
@@ -128,6 +132,7 @@
         </div>
     </div>
 
+    <!-- MÓDULO DE RECEPCIÓN (ADMIN) -->
     {% if es_admin %}
     <div class="tab-pane fade" id="recepcion" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mt-3 mb-3">
@@ -176,6 +181,7 @@
     </div>
     {% endif %}
 
+    <!-- NOTIFICACIONES -->
     <div class="tab-pane fade" id="notificaciones" role="tabpanel">
         {% if es_admin %}
         <h4 class="text-white mt-3">Notificaciones Administrativas</h4>
@@ -216,6 +222,7 @@
         <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay firmas nuevas.</div>
         {% endif %}
         {% else %}
+        <!-- VISTA DOCENTE -->
         <h4 class="text-white mt-3">Bandeja de Notificaciones Docente</h4>
         {% if solicitudes_recibidas %}
         <h5 class="text-warning mt-4">🤝 Solicitudes de Cambio de Agenda</h5>
@@ -268,6 +275,7 @@
         {% endif %}
     </div>
 
+    <!-- HISTORIAL ADMIN -->
     {% if es_admin %}
     <div class="tab-pane fade" id="historial" role="tabpanel">
         <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
@@ -275,6 +283,7 @@
             <a href="{{ url_for('exportar_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Todo Excel</a>
         </div>
 
+        <!-- FORMULARIO DE FILTROS -->
         <div class="ghost-card p-3 mb-4" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
             <form method="GET" action="/dashboard" class="row g-3 align-items-end">
                 <input type="hidden" name="tab" value="historial">
@@ -289,6 +298,7 @@
             {% endif %}
         </div>
 
+        <!-- ZONA DE PELIGRO: PURGA MASIVA -->
         <div class="ghost-card p-3 mb-4 mt-2" style="background: rgba(220,53,69,0.1); border: 1px solid rgba(220,53,69,0.4); border-radius: 8px;">
             <h5 class="text-danger fw-bold">⚠️ Zona de Peligro: Purga de Agendas</h5>
             <p class="text-white-50 mb-2"><small>Esta acción eliminará de forma permanente todas las agendas (de todos los recursos y docentes) dentro del periodo seleccionado. <strong>Se recomienda descargar el Excel como respaldo antes de proceder.</strong></small></p>
@@ -353,6 +363,11 @@
     {% endif %}
 </div>
 
+<!-- ==========================================
+     ZONA DE MODALES Y SCRIPTS
+     ========================================== -->
+
+<!-- Modal Eliminar/Liberar Mi Reserva -->
 <div class="modal fade" id="modalMiReserva" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content text-dark" style="background: #e9ecef;">
@@ -373,6 +388,7 @@
     </div>
 </div>
 
+<!-- Modal Solicitar Cambio -->
 <div class="modal fade" id="modalSolicitarCambio" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content text-dark" style="background: #e9ecef;">
@@ -390,6 +406,7 @@
     </div>
 </div>
 
+<!-- Modal Recepcion Docente -->
 {% if not es_admin and notificaciones %}
 {% for notif in notificaciones %}
 <div class="modal fade" id="modalRecepcion{{ notif.id }}" tabindex="-1" aria-hidden="true">
@@ -404,28 +421,50 @@
 {% endfor %}
 {% endif %}
 
+<!-- ACTUALIZACIÓN: Modal Editar (Admin) con selector de recurrencia -->
 {% if es_admin %}
 {% for r in reservas %}
 <div class="modal fade" id="modalEditarReserva{{ r.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog"><div class="modal-content text-dark">
         <form action="/editar_reserva/{{ r.id }}" method="POST">
             <div class="modal-body">
-                <select name="laboratorio" class="form-select">
+                <label class="form-label mb-0 fw-bold"><small>Laboratorio</small></label>
+                <select name="laboratorio" class="form-select form-select-sm mb-2">
                     <option value="Laboratorio de Computación" {% if r.laboratorio == 'Laboratorio de Computación' %}selected{% endif %}>Laboratorio de Computación</option>
                     <option value="Laboratorio Móvil Completo" {% if r.laboratorio == 'Laboratorio Móvil Completo' %}selected{% endif %}>Lab. Móvil Completo</option>
                     <option value="Mini Laboratorio" {% if r.laboratorio == 'Mini Laboratorio' %}selected{% endif %}>Mini Laboratorio</option>
                     <option value="Pantalla Digital 1" {% if r.laboratorio == 'Pantalla Digital 1' %}selected{% endif %}>Pantalla Digital 1</option>
                     <option value="Pantalla Digital 2" {% if r.laboratorio == 'Pantalla Digital 2' %}selected{% endif %}>Pantalla Digital 2</option>
                 </select>
-                <input type="date" name="fecha" value="{{ r.fecha }}" class="form-control mt-2"><input type="text" name="horarioBloque" value="{{ r.bloque }}" class="form-control mt-2"><textarea name="comentario" class="form-control mt-2">{{ r.comentario }}</textarea>
+
+                <label class="form-label mb-0 fw-bold"><small>Fecha Base a Editar</small></label>
+                <input type="date" name="fecha" value="{{ r.fecha }}" class="form-control form-control-sm mb-2">
+
+                <label class="form-label mb-0 fw-bold"><small>Bloque Horario</small></label>
+                <input type="text" name="horarioBloque" value="{{ r.bloque }}" class="form-control form-control-sm mb-2">
+
+                <!-- NUEVO SELECTOR DE REPETICIÓN -->
+                <label class="form-label mb-0 fw-bold text-success"><small>🔄 Extender/Repetir hacia el futuro:</small></label>
+                <select class="form-select form-select-sm mb-2 border-success" name="recurrencia">
+                    <option value="unico">No, editar solamente esta reserva</option>
+                    <option value="semanal">Editar esta y repetir por 1 Semana (+7 días)</option>
+                    <option value="1_mes">Editar esta y repetir por 1 Mes</option>
+                    <option value="2_meses">Editar esta y repetir por 2 Meses</option>
+                    <option value="semestre">Editar esta y repetir por todo el Semestre</option>
+                    <option value="anio">Editar esta y repetir todo el Año</option>
+                </select>
+
+                <label class="form-label mb-0 fw-bold"><small>Comentario</small></label>
+                <textarea name="comentario" class="form-control form-control-sm">{{ r.comentario }}</textarea>
             </div>
-            <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar</button></div>
+            <div class="modal-footer"><button type="submit" class="btn btn-primary">Guardar Cambios</button></div>
         </form>
     </div></div>
 </div>
 {% endfor %}
 {% endif %}
 
+<!-- SCRIPTS -->
 <script>
     function verificarComentarioAdmin() {
         var estado = document.getElementById('estadoRecepcionForm').value;

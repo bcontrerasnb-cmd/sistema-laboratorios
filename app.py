@@ -10,7 +10,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres.imzdhutlbristfrfh
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# ACTUALIZADO: Nuevo correo de Marisela
 ADMINISTRADORES = ['admin', 'evaldes@colegioconcepcionlinares.cl', 'cmunoz@colegioconcepcionlinares.cl', 'mcastro@colegioconcepcionlinares.cl']
 
 # --- MODELOS DE BASE DE DATOS ---
@@ -197,16 +196,76 @@ def agendar():
     else: flash('Error: No se agendó ninguna fecha. Todas chocaban con reservas existentes.', 'error')
     return redirect(url_for('dashboard'))
 
+# NUEVA ACTUALIZACIÓN: EDICIÓN CON RECURRENCIA MASIVA
 @app.route('/editar_reserva/<int:id>', methods=['POST'])
 def editar_reserva(id):
     if session.get('usuario') not in ADMINISTRADORES: return redirect(url_for('dashboard'))
     reserva = Reserva.query.get_or_404(id)
-    reserva.laboratorio = request.form.get('laboratorio')
-    reserva.fecha = request.form.get('fecha')
-    reserva.bloque = request.form.get('horarioBloque')
-    reserva.comentario = request.form.get('comentario')
+
+    nuevo_laboratorio = request.form.get('laboratorio')
+    nueva_fecha = request.form.get('fecha')
+    nuevo_bloque = request.form.get('horarioBloque')
+    nuevo_comentario = request.form.get('comentario')
+    recurrencia = request.form.get('recurrencia')
+
+    # 1. Actualizar la reserva base seleccionada
+    reserva.laboratorio = nuevo_laboratorio
+    reserva.fecha = nueva_fecha
+    reserva.bloque = nuevo_bloque
+    reserva.comentario = nuevo_comentario
+    usuario_reserva = reserva.usuario # Mantiene el dueño
+
     db.session.commit()
-    flash('Reserva editada correctamente.', 'success')
+
+    # 2. Si eligió extender la agenda hacia el futuro
+    if recurrencia and recurrencia != 'unico':
+        nuevo_inicio, nuevo_fin = nuevo_bloque.split(' - ')
+        fecha_base = datetime.strptime(nueva_fecha, '%Y-%m-%d')
+
+        if recurrencia == 'semanal': fin = fecha_base + timedelta(weeks=1)
+        elif recurrencia == '1_mes': fin = fecha_base + timedelta(days=30)
+        elif recurrencia == '2_meses': fin = fecha_base + timedelta(days=60)
+        elif recurrencia == 'semestre': fin = datetime(fecha_base.year, 6, 30)
+        elif recurrencia == 'anio': fin = datetime(fecha_base.year, 12, 31)
+        else: fin = fecha_base
+
+        fechas_a_agendar = []
+        fecha_actual = fecha_base + timedelta(weeks=1) # Empieza la semana siguiente a la editada
+        while fecha_actual <= fin:
+            fechas_a_agendar.append(fecha_actual)
+            fecha_actual += timedelta(weeks=1)
+
+        exitos, errores, fechas_error = 0, 0, []
+
+        for f_obj in fechas_a_agendar:
+            f_str = f_obj.strftime('%Y-%m-%d')
+            reservas_del_dia = Reserva.query.filter_by(fecha=f_str).all()
+            hay_choque = False
+
+            for r_dia in reservas_del_dia:
+                r_inicio, r_fin = r_dia.bloque.split(' - ')
+                if nuevo_inicio < r_fin and nuevo_fin > r_inicio:
+                    if nuevo_laboratorio == r_dia.laboratorio: hay_choque = True; break
+
+            if hay_choque:
+                errores += 1
+                fechas_error.append(f_str)
+            else:
+                nueva_reserva = Reserva(laboratorio=nuevo_laboratorio, fecha=f_str, bloque=nuevo_bloque, usuario=usuario_reserva, comentario=nuevo_comentario)
+                db.session.add(nueva_reserva)
+                exitos += 1
+
+        db.session.commit()
+
+        if errores == 0 and exitos > 0:
+            flash(f'Reserva actualizada y replicada con éxito hacia el futuro ({exitos} nuevas).', 'success')
+        elif exitos > 0 and errores > 0:
+            flash(f'Reserva actualizada. Se replicó {exitos} veces, pero {errores} chocaron en: {", ".join(fechas_error)}', 'warning')
+        elif errores > 0 and exitos == 0:
+            flash('Reserva actualizada, pero NO se pudo replicar al futuro porque todas chocaban.', 'warning')
+    else:
+        flash('Reserva editada correctamente (Sin propagación).', 'success')
+
     return redirect(url_for('dashboard'))
 
 @app.route('/eliminar_reserva/<int:id>', methods=['POST'])
@@ -228,58 +287,42 @@ def eliminar_reserva(id):
     else:
         flash('No tienes permiso para eliminar la reserva de otro docente.', 'danger')
     return redirect(url_for('dashboard'))
+
 @app.route('/eliminar_masivo', methods=['POST'])
 def eliminar_masivo():
-    # Verificación de seguridad: Solo los administradores pueden hacer esto
-    if session.get('usuario') not in ADMINISTRADORES:
-        return redirect(url_for('dashboard'))
-
+    if session.get('usuario') not in ADMINISTRADORES: return redirect(url_for('dashboard'))
     periodo = request.form.get('periodo')
     hoy = datetime.now()
     fecha_inicio = ""
     fecha_fin = ""
 
-    # Calcular los rangos de fecha según el periodo seleccionado
     if periodo == 'semana':
-        inicio = hoy - timedelta(days=hoy.weekday()) # Lunes de esta semana
-        fin = inicio + timedelta(days=6)             # Domingo de esta semana
+        inicio = hoy - timedelta(days=hoy.weekday())
+        fin = inicio + timedelta(days=6)
         fecha_inicio = inicio.strftime('%Y-%m-%d')
         fecha_fin = fin.strftime('%Y-%m-%d')
-
     elif periodo == 'mes':
         fecha_inicio = hoy.replace(day=1).strftime('%Y-%m-%d')
-        # Truco matemático para obtener el último día del mes actual:
         siguiente_mes = hoy.replace(day=28) + timedelta(days=4)
         fin = siguiente_mes - timedelta(days=siguiente_mes.day)
         fecha_fin = fin.strftime('%Y-%m-%d')
-
     elif periodo == 'semestre':
-        if hoy.month <= 6: # Primer semestre
+        if hoy.month <= 6:
             fecha_inicio = f"{hoy.year}-01-01"
             fecha_fin = f"{hoy.year}-06-30"
-        else:              # Segundo semestre
+        else:
             fecha_inicio = f"{hoy.year}-07-01"
             fecha_fin = f"{hoy.year}-12-31"
-
     elif periodo == 'anio':
         fecha_inicio = f"{hoy.year}-01-01"
         fecha_fin = f"{hoy.year}-12-31"
 
-    # Ejecutar la eliminación masiva en la base de datos
     if fecha_inicio and fecha_fin:
-        reservas_a_eliminar = Reserva.query.filter(
-            Reserva.fecha >= fecha_inicio,
-            Reserva.fecha <= fecha_fin
-        ).all()
-
+        reservas_a_eliminar = Reserva.query.filter(Reserva.fecha >= fecha_inicio, Reserva.fecha <= fecha_fin).all()
         cantidad = len(reservas_a_eliminar)
-
-        for r in reservas_a_eliminar:
-            db.session.delete(r)
-
+        for r in reservas_a_eliminar: db.session.delete(r)
         db.session.commit()
         flash(f'Purga masiva completada: Se han eliminado {cantidad} reservas de forma permanente.', 'success')
-
     return redirect(url_for('dashboard'))
 
 @app.route('/tomar_agenda_liberada/<int:id>', methods=['POST'])
@@ -420,7 +463,7 @@ def api_reservas():
             color = '#3788d8'
             if 'Completo' in r.laboratorio: color = '#fd7e14'
             elif 'Pantalla' in r.laboratorio: color = '#dc3545'
-            elif 'Mini' in r.laboratorio: color = '#20c997' # NUEVO: Color verde turquesa para Mini Laboratorio
+            elif 'Mini' in r.laboratorio: color = '#20c997'
 
             eventos.append({
                 'id': r.id, 'title': f"{r.laboratorio} - {r.usuario}",
