@@ -228,6 +228,59 @@ def eliminar_reserva(id):
     else:
         flash('No tienes permiso para eliminar la reserva de otro docente.', 'danger')
     return redirect(url_for('dashboard'))
+@app.route('/eliminar_masivo', methods=['POST'])
+def eliminar_masivo():
+    # Verificación de seguridad: Solo los administradores pueden hacer esto
+    if session.get('usuario') not in ADMINISTRADORES:
+        return redirect(url_for('dashboard'))
+
+    periodo = request.form.get('periodo')
+    hoy = datetime.now()
+    fecha_inicio = ""
+    fecha_fin = ""
+
+    # Calcular los rangos de fecha según el periodo seleccionado
+    if periodo == 'semana':
+        inicio = hoy - timedelta(days=hoy.weekday()) # Lunes de esta semana
+        fin = inicio + timedelta(days=6)             # Domingo de esta semana
+        fecha_inicio = inicio.strftime('%Y-%m-%d')
+        fecha_fin = fin.strftime('%Y-%m-%d')
+
+    elif periodo == 'mes':
+        fecha_inicio = hoy.replace(day=1).strftime('%Y-%m-%d')
+        # Truco matemático para obtener el último día del mes actual:
+        siguiente_mes = hoy.replace(day=28) + timedelta(days=4)
+        fin = siguiente_mes - timedelta(days=siguiente_mes.day)
+        fecha_fin = fin.strftime('%Y-%m-%d')
+
+    elif periodo == 'semestre':
+        if hoy.month <= 6: # Primer semestre
+            fecha_inicio = f"{hoy.year}-01-01"
+            fecha_fin = f"{hoy.year}-06-30"
+        else:              # Segundo semestre
+            fecha_inicio = f"{hoy.year}-07-01"
+            fecha_fin = f"{hoy.year}-12-31"
+
+    elif periodo == 'anio':
+        fecha_inicio = f"{hoy.year}-01-01"
+        fecha_fin = f"{hoy.year}-12-31"
+
+    # Ejecutar la eliminación masiva en la base de datos
+    if fecha_inicio and fecha_fin:
+        reservas_a_eliminar = Reserva.query.filter(
+            Reserva.fecha >= fecha_inicio,
+            Reserva.fecha <= fecha_fin
+        ).all()
+
+        cantidad = len(reservas_a_eliminar)
+
+        for r in reservas_a_eliminar:
+            db.session.delete(r)
+
+        db.session.commit()
+        flash(f'Purga masiva completada: Se han eliminado {cantidad} reservas de forma permanente.', 'success')
+
+    return redirect(url_for('dashboard'))
 
 @app.route('/tomar_agenda_liberada/<int:id>', methods=['POST'])
 def tomar_agenda_liberada(id):

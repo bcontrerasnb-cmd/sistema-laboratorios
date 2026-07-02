@@ -72,7 +72,8 @@
                     <select class="form-select ghost-input" name="laboratorio" required>
                         <option value="Laboratorio de Computación">Laboratorio de Computación</option>
                         <option value="Laboratorio Móvil Completo">Lab. Móvil Completo (40 tablets)</option>
-                        <option value="Mini Laboratorio">Mini Laboratorio</option> <option value="Pantalla Digital 1">Pantalla Digital 1</option>
+                        <option value="Mini Laboratorio">Mini Laboratorio</option>
+                        <option value="Pantalla Digital 1">Pantalla Digital 1</option>
                         <option value="Pantalla Digital 2">Pantalla Digital 2</option>
                     </select>
                 </div>
@@ -211,6 +212,8 @@
             </div>
             {% endfor %}
         </div>
+        {% else %}
+        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">No hay firmas nuevas.</div>
         {% endif %}
         {% else %}
         <h4 class="text-white mt-3">Bandeja de Notificaciones Docente</h4>
@@ -259,6 +262,9 @@
             {% endfor %}
         </div>
         {% endif %}
+        {% if not solicitudes_recibidas and not solicitudes_respuestas and not notificaciones %}
+        <div class="alert alert-info mt-3" style="background: rgba(13, 202, 240, 0.2); color: white; border:none;">Tu bandeja de notificaciones está limpia.</div>
+        {% endif %}
         {% endif %}
     </div>
 
@@ -268,14 +274,37 @@
             <h4 class="text-white m-0">Historial de Agendas</h4>
             <a href="{{ url_for('exportar_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Todo Excel</a>
         </div>
+
         <div class="ghost-card p-3 mb-4" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
             <form method="GET" action="/dashboard" class="row g-3 align-items-end">
                 <input type="hidden" name="tab" value="historial">
                 <div class="col-md-4"><label class="form-label text-white-50"><small>Filtrar por Docente</small></label><select class="form-select ghost-input form-select-sm" name="filtro_docente"><option value="">Todos los docentes</option>{% for d in docentes %}<option value="{{ d.name }}" {% if request.args.get('filtro_docente') == d.name %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
                 <div class="col-md-4"><label class="form-label text-white-50"><small>Filtrar por Día exacto</small></label><input type="date" class="form-control ghost-input form-control-sm" name="filtro_fecha" value="{{ request.args.get('filtro_fecha', '') }}"></div>
-                <div class="col-md-4"><button type="submit" class="btn btn-info btn-sm fw-bold">🔍 Buscar</button> <a href="/dashboard?tab=historial" class="btn btn-outline-light btn-sm ms-2">Limpiar</a></div>
+                <div class="col-md-4"><button type="submit" class="btn btn-info btn-sm fw-bold">🔍 Buscar</button> <a href="/dashboard?tab=historial" class="btn btn-outline-light btn-sm ms-2">Limpiar / Ver Semana</a></div>
+            </form>
+            {% if not request.args.get('filtro_docente') and not request.args.get('filtro_fecha') %}
+            <div class="mt-2 text-warning"><small>* Mostrando únicamente las reservas de la semana en curso. Usa el filtro para ver fechas antiguas.</small></div>
+            {% else %}
+            <div class="mt-2 text-success"><small>* Mostrando resultados históricos según el filtro aplicado.</small></div>
+            {% endif %}
+        </div>
+
+        <div class="ghost-card p-3 mb-4 mt-2" style="background: rgba(220,53,69,0.1); border: 1px solid rgba(220,53,69,0.4); border-radius: 8px;">
+            <h5 class="text-danger fw-bold">⚠️ Zona de Peligro: Purga de Agendas</h5>
+            <p class="text-white-50 mb-2"><small>Esta acción eliminará de forma permanente todas las agendas (de todos los recursos y docentes) dentro del periodo seleccionado. <strong>Se recomienda descargar el Excel como respaldo antes de proceder.</strong></small></p>
+
+            <form action="/eliminar_masivo" method="POST" class="d-flex flex-wrap gap-3 align-items-center" onsubmit="return confirm('ATENCIÓN ADMINISTRADOR:\n\nEstás a punto de borrar masivamente las agendas de todos los profesores.\n\n¿Estás absolutamente seguro de continuar? Esta acción NO se puede deshacer.');">
+                <select name="periodo" class="form-select ghost-input form-select-sm w-auto border-danger text-white" style="background: rgba(0,0,0,0.3);" required>
+                    <option value="">Seleccione el periodo a eliminar...</option>
+                    <option value="semana">Esta Semana (Lunes a Domingo)</option>
+                    <option value="mes">Este Mes Actual</option>
+                    <option value="semestre">Este Semestre</option>
+                    <option value="anio">Todo el Año Actual</option>
+                </select>
+                <button type="submit" class="btn btn-danger btn-sm fw-bold">🗑️ Ejecutar Purga Masiva</button>
             </form>
         </div>
+
         <div class="table-responsive mb-5">
             <table class="table text-white table-sm" style="font-size: 0.9em;">
                 <thead><tr style="background: rgba(255,255,255,0.1);"><th>Fecha</th><th>Recurso</th><th>Horario</th><th>Docente</th><th>Uso</th><th>Acciones</th></tr></thead>
@@ -286,6 +315,34 @@
                     <td>
                         <button type="button" class="btn btn-sm btn-outline-light py-0 px-2" data-bs-toggle="modal" data-bs-target="#modalEditarReserva{{ r.id }}">✏️</button>
                         <form action="/eliminar_reserva/{{ r.id }}" method="POST" style="display:inline;"><button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="return confirm('¿Seguro que deseas eliminar esta reserva?');">❌</button></form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <hr style="border-color: rgba(255,255,255,0.2);">
+
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+            <h4 class="text-white m-0">Últimas 100 Recepciones</h4>
+            <a href="{{ url_for('exportar_recepciones_excel') }}" class="btn btn-success btn-sm ghost-btn" style="background-color: rgba(25, 135, 84, 0.4); border-color: #198754;">Descargar Todo Excel</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table text-white table-sm" style="font-size: 0.9em;">
+                <thead><tr style="background: rgba(255,255,255,0.1);"><th>Fecha</th><th>Docente</th><th>Laboratorio</th><th>Entregó/Recibió</th><th>Equipos</th><th>Estado Final</th><th>Comentarios</th></tr></thead>
+                <tbody>
+                {% for r in recepciones %}
+                <tr>
+                    <td>{{ r.fecha }}</td><td>{{ r.docente }}</td><td>{{ r.laboratorio }}</td><td>{{ r.hora_entrega }} - {{ r.hora_recepcion }}</td><td>{{ r.equipos_recepcionados }}</td>
+                    <td>
+                        {% if r.conforme == 'Pendiente' %}<span class="badge bg-warning text-dark">Pendiente de Firma</span>
+                        {% elif r.conforme == 'Si' %}<span class="badge bg-success">{{ r.estado|capitalize }} / Conforme</span>
+                        {% else %}<span class="badge bg-danger">{{ r.estado|capitalize }} / Inconforme</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if r.comentario_admin %}<small class="text-warning">A: {{ r.comentario_admin }}</small><br>{% endif %}
+                        {% if r.comentario_docente %}<small class="text-info">D: {{ r.comentario_docente }}</small>{% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -356,7 +413,8 @@
                 <select name="laboratorio" class="form-select">
                     <option value="Laboratorio de Computación" {% if r.laboratorio == 'Laboratorio de Computación' %}selected{% endif %}>Laboratorio de Computación</option>
                     <option value="Laboratorio Móvil Completo" {% if r.laboratorio == 'Laboratorio Móvil Completo' %}selected{% endif %}>Lab. Móvil Completo</option>
-                    <option value="Mini Laboratorio" {% if r.laboratorio == 'Mini Laboratorio' %}selected{% endif %}>Mini Laboratorio</option> <option value="Pantalla Digital 1" {% if r.laboratorio == 'Pantalla Digital 1' %}selected{% endif %}>Pantalla Digital 1</option>
+                    <option value="Mini Laboratorio" {% if r.laboratorio == 'Mini Laboratorio' %}selected{% endif %}>Mini Laboratorio</option>
+                    <option value="Pantalla Digital 1" {% if r.laboratorio == 'Pantalla Digital 1' %}selected{% endif %}>Pantalla Digital 1</option>
                     <option value="Pantalla Digital 2" {% if r.laboratorio == 'Pantalla Digital 2' %}selected{% endif %}>Pantalla Digital 2</option>
                 </select>
                 <input type="date" name="fecha" value="{{ r.fecha }}" class="form-control mt-2"><input type="text" name="horarioBloque" value="{{ r.bloque }}" class="form-control mt-2"><textarea name="comentario" class="form-control mt-2">{{ r.comentario }}</textarea>
